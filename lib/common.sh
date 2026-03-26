@@ -18,7 +18,7 @@ header() { echo -e "\n${BLUE}═════════════════
 # --- ISO y Kickstart ---
 ROCKY_ISO_URL="https://ftp.madrid.xatelite.com/2026/Rocky-9.6-x86_64-dvd.iso"
 ROCKY_ISO_NAME="Rocky-9.6-x86_64-dvd.iso"
-KS_URL="https://raw.githubusercontent.com/TU_USUARIO/proxmox-vfx-scripts/main/kickstart/rocky9-base.ks"
+KS_URL="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/kickstart/rocky9-base.ks"
 
 # Variables que se rellenan con el menú interactivo
 VM_NAME=""
