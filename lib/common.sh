@@ -16,7 +16,7 @@ header() { echo -e "\n${BLUE}═════════════════
            echo -e "${BLUE}══════════════════════════════════════${NC}\n"; }
 
 # --- ISO y Kickstart ---
-ROCKY_ISO_URL="https://ftp.madrid.xatelite.com/2026/Rocky-9.6-x86_64-dvd.iso"
+ROCKY_ISO_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9.6-x86_64-dvd.iso"
 ROCKY_ISO_NAME="Rocky-9.6-x86_64-dvd.iso"
 KS_URL="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/kickstart/rocky9-base.ks"
 
