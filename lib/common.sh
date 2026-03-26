@@ -158,7 +158,6 @@ ask_config() {
 download_rocky_iso() {
   local iso_dir="/var/lib/vz/template/iso"
 
-  # Intentar obtener la ruta real del storage elegido
   local real_path
   real_path=$(pvesm path "${ISO_STORAGE}:iso/${ROCKY_ISO_NAME}" 2>/dev/null)
   if [[ -n "$real_path" ]]; then
@@ -167,21 +166,23 @@ download_rocky_iso() {
 
   local iso_path="${iso_dir}/${ROCKY_ISO_NAME}"
 
-  if [[ -f "$iso_path" ]]; then
+  if [[ -f "$iso_path" && -s "$iso_path" ]]; then
     log "ISO ya existe en ${iso_path}"
     return 0
   fi
 
+  # Borrar fichero vacío si quedó de un intento anterior
+  [[ -f "$iso_path" ]] && rm -f "$iso_path"
+
   info "Descargando Rocky 9.6 desde FTP..."
   mkdir -p "$iso_dir"
-  wget -q --show-progress -O "$iso_path" "$ROCKY_ISO_URL" \
+  wget --progress=bar:force -O "$iso_path" "$ROCKY_ISO_URL" 2>&1 \
     || error "No se pudo descargar la ISO. Comprueba la conexión o la URL del FTP."
   log "ISO descargada → ${iso_path}"
 }
 
 # =============================================================================
 # create_vm
-# Usa las variables globales rellenadas por ask_config
 # =============================================================================
 create_vm() {
   info "Creando VM ${VMID} (${VM_NAME})..."
@@ -204,7 +205,6 @@ create_vm() {
     --agent enabled=1 \
     || error "Fallo al crear la VM ${VMID}"
 
-  # Pasar Kickstart como argumento al kernel → instalación 100% desatendida
   qm set "$VMID" \
     --args "-append 'inst.ks=${KS_URL} inst.cmdline console=ttyS0,115200n8'" \
     2>/dev/null || true
