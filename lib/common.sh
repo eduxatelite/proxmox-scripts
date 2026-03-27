@@ -216,10 +216,6 @@ create_vm() {
     --agent enabled=1 \
     || error "Fallo al crear la VM ${VMID}"
 
-  qm set "$VMID" \
-    --args "-append 'inst.ks=${KS_URL} inst.cmdline console=ttyS0,115200n8'" \
-    2>/dev/null || true
-
   log "VM ${VMID} creada"
 }
 
