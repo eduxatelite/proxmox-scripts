@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # lib/common.sh — Librería base compartida para scripts VFX
-# Usa Rocky 9.7
+# Usa Rocky 9.7 Cloud Image (sin instalador, arranca en ~30 segundos)
 # =============================================================================
 
 # --- Colores ---
@@ -18,8 +18,8 @@ header() { echo -e "\n${BLUE}═════════════════
 
 # --- Rocky 9.7 Cloud Image ---
 ROCKY_VERSION="9.7"
-ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-7.x86_64.qcow2"
-ROCKY_IMG_NAME="Rocky-9-7.x86_64.qcow2"
+ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-6.x86_64.qcow2"
+ROCKY_IMG_NAME="Rocky-9-6.x86_64.qcow2"
 
 # --- Cloud-Init: credenciales por defecto ---
 CI_USER="root"
@@ -137,7 +137,7 @@ ask_config() {
   echo -e "  Cores    : ${CYAN}${CORES}${NC}  |  RAM: ${CYAN}${RAM_GB} GB${NC}"
   echo -e "  Disco    : ${CYAN}${DISK_SIZE} GB${NC} en ${CYAN}${STORAGE}${NC}"
   echo -e "  Red      : ${CYAN}${BRIDGE}${NC}${VLAN_TAG:+ (VLAN ${VLAN_TAG})}"
-  echo -e "  Rocky    : ${CYAN}${ROCKY_VERSION}${NC}"
+  echo -e "  Rocky    : ${CYAN}${ROCKY_VERSION}${NC} (Cloud Image)"
   echo -e "${BLUE}══════════════════════════════════════${NC}"
   echo ""
 
@@ -256,12 +256,15 @@ start_vm_and_wait() {
 # =============================================================================
 get_vm_ip_and_mac() {
   local ip="" mac="" attempts=0
+  info "Esperando a que la red esté disponible..."
+  sleep 10
   while [[ -z "$ip" && $attempts -lt 12 ]]; do
     local ifaces
     ifaces=$(qm agent "$VMID" network-get-interfaces 2>/dev/null)
     ip=$(echo "$ifaces" | grep -oP '(?<="ip-address":")[^"]+' | grep -v '127.0.0.1' | grep -v '^::' | head -1)
     mac=$(echo "$ifaces" | grep -oP '(?<="hardware-address":")[^"]+' | grep -v '00:00:00' | head -1)
-    sleep 5; attempts=$((attempts+1))
+    [[ -z "$ip" ]] && sleep 5
+    attempts=$((attempts+1))
   done
   VM_IP="$ip"
   VM_MAC="$mac"
@@ -272,16 +275,25 @@ get_vm_ip_and_mac() {
 # =============================================================================
 post_install() {
   info "Aplicando configuración post-instalación..."
-  qm agent "$VMID" exec -- bash -c "
-    sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
-    setenforce 0 2>/dev/null || true
-    systemctl disable --now firewalld 2>/dev/null || true
-    localectl set-keymap es 2>/dev/null || true
-    timedatectl set-timezone Europe/Madrid 2>/dev/null || true
-    localectl set-locale LANG=en_US.UTF-8 2>/dev/null || true
-    dnf update -y -q
-    systemctl enable --now qemu-guest-agent 2>/dev/null || true
-  " && log "Configuración aplicada" || warn "Algún paso falló — revisa manualmente"
+
+  local script="/tmp/post-install-${VMID}.sh"
+  cat > "$script" << 'EOF'
+#!/bin/bash
+sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+setenforce 0 2>/dev/null || true
+systemctl disable --now firewalld 2>/dev/null || true
+localectl set-keymap es 2>/dev/null || true
+timedatectl set-timezone Europe/Madrid 2>/dev/null || true
+localectl set-locale LANG=en_US.UTF-8 2>/dev/null || true
+dnf update -y -q
+systemctl enable --now qemu-guest-agent 2>/dev/null || true
+EOF
+
+  qm agent "$VMID" exec -- bash -s < "$script" \
+    && log "Configuración aplicada" \
+    || warn "Algún paso falló — revisa manualmente"
+
+  rm -f "$script"
 }
 
 # =============================================================================
