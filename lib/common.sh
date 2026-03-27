@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # lib/common.sh — Librería base compartida para scripts VFX
-# Usa Rocky 9.7 Cloud Image (sin instalador, arranca en ~30 segundos)
+# Usa Rocky 9.7
 # =============================================================================
 
 # --- Colores ---
@@ -18,8 +18,8 @@ header() { echo -e "\n${BLUE}═════════════════
 
 # --- Rocky 9.7 Cloud Image ---
 ROCKY_VERSION="9.7"
-ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-6.x86_64.qcow2"
-ROCKY_IMG_NAME="Rocky-9-6.x86_64.qcow2"
+ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-7.x86_64.qcow2"
+ROCKY_IMG_NAME="Rocky-9-7.x86_64.qcow2"
 
 # --- Cloud-Init: credenciales por defecto ---
 CI_USER="root"
