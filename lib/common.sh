@@ -324,7 +324,8 @@ print_summary() {
 
   # --- VLAN ---
   echo ""
-  read -rp "$(echo -e "VLAN Tag (vacío = sin VLAN): ")" VLAN_TAG
+  echo -e "VLAN Tag (vacío = sin VLAN):"
+  read -rp "> " VLAN_TAG
   if [[ -n "$VLAN_TAG" ]]; then
     NET0_EXTRA=",tag=${VLAN_TAG}"
   else
