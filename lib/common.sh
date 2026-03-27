@@ -159,9 +159,9 @@ download_rocky_image() {
 
   [[ -f "$img_path" ]] && rm -f "$img_path"
 
-  info "Descargando Rocky ${ROCKY_VERSION} Cloud Image..."
+  info "Descargando Rocky ${ROCKY_VERSION}"
   wget --progress=bar:force -O "$img_path" "$ROCKY_IMG_URL" 2>&1 \
-    || error "No se pudo descargar la cloud image."
+    || error "No se pudo descargar la ${ROCKY_IMG_NAME}"
   log "Cloud image descargada → ${img_path}"
 }
 
@@ -223,12 +223,37 @@ create_vm() {
 
   # Configurar Cloud-Init
   info "Configurando Cloud-Init..."
+
+  # Script de usuario que se ejecuta en el primer arranque
+  local userdata_file="/tmp/userdata-${VMID}.yml"
+  cat > "$userdata_file" << 'EOF'
+#cloud-config
+runcmd:
+  - sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+  - setenforce 0
+  - systemctl disable --now firewalld
+  - localectl set-keymap es
+  - timedatectl set-timezone Europe/Madrid
+  - localectl set-locale LANG=en_US.UTF-8
+  - dnf update -y -q
+  - sed -i 's/^#.*allow-rpcs.*/allow-rpcs = "guest-exec guest-exec-status"/' /etc/qemu-guest-agent/qemu-ga.conf
+  - echo '[general]' > /etc/qemu-guest-agent/qemu-ga.conf
+  - echo 'allow-rpcs = guest-exec,guest-exec-status,guest-file-open,guest-file-close,guest-file-read,guest-file-write,guest-file-seek,guest-file-flush' >> /etc/qemu-guest-agent/qemu-ga.conf
+  - systemctl restart qemu-guest-agent
+EOF
+
   qm set "$VMID" \
     --ciuser "$CI_USER" \
     --cipassword "$CI_PASSWORD" \
     --ipconfig0 ip=dhcp \
     --searchdomain local \
-    --nameserver 8.8.8.8
+    --nameserver 8.8.8.8 \
+    --cicustom "user=local:snippets/userdata-${VMID}.yml"
+
+  # Copiar el userdata al storage local de snippets
+  mkdir -p /var/lib/vz/snippets/
+  cp "$userdata_file" "/var/lib/vz/snippets/userdata-${VMID}.yml"
+  rm -f "$userdata_file"
 
   log "VM ${VMID} creada y configurada"
 }
@@ -274,28 +299,8 @@ get_vm_ip_and_mac() {
 # post_install
 # =============================================================================
 post_install() {
-  info "Aplicando configuración post-instalación..."
-
-  local cmds=(
-    "sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config"
-    "setenforce 0"
-    "systemctl disable --now firewalld"
-    "localectl set-keymap es"
-    "timedatectl set-timezone Europe/Madrid"
-    "localectl set-locale LANG=en_US.UTF-8"
-    "dnf update -y -q"
-    "systemctl enable --now qemu-guest-agent"
-  )
-
-  local ok=true
-  for cmd in "${cmds[@]}"; do
-    qm agent "$VMID" exec -- bash -c "$cmd" &>/dev/null || {
-      warn "Falló: $cmd"
-      ok=false
-    }
-  done
-
-  $ok && log "Configuración aplicada" || warn "Algunos pasos fallaron — revisa manualmente"
+  info "Configuración aplicada vía Cloud-Init (SELinux, firewall, timezone, teclado, dnf update)"
+  log "La configuración se aplica automáticamente en el primer arranque"
 }
 
 # =============================================================================
