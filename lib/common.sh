@@ -58,7 +58,7 @@ ask_config() {
   done < <(pvesm status --content images 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}')
 
   if [[ ${#storages[@]} -eq 0 ]]; then
-    warn "No se detectaron storages con imágenes. Usando 'local-lvm' por defecto."
+    warn "No se detectaron storages para discos. Usando 'local-lvm' por defecto."
     storages=("local-lvm")
   fi
 
