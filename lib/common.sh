@@ -302,7 +302,9 @@ start_vm_and_wait() {
 # =============================================================================
 get_vm_ip_and_mac() {
   local ip="" mac="" attempts=0
-  while [[ -z "$ip" && $attempts -lt 12 ]]; do
+  local spinner='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+  while [[ -z "$ip" && $attempts -lt 24 ]]; do
     local ifaces
     ifaces=$(qm agent "$VMID" network-get-interfaces 2>/dev/null)
     ip=$(echo "$ifaces" \
@@ -316,9 +318,14 @@ get_vm_ip_and_mac() {
       | grep -v '00:00:00:00:00:00' \
       | grep -oP '([0-9a-f]{2}:){5}[0-9a-f]{2}' \
       | head -1)
-    [[ -z "$ip" ]] && sleep 5
+    if [[ -z "$ip" ]]; then
+      printf "\r  ${CYAN}%s${NC} Esperando IP por DHCP..." "${spinner:$((i%10)):1}"
+      sleep 5
+      i=$((i+1))
+    fi
     attempts=$((attempts+1))
   done
+  printf "\r                                        \r"
   VM_IP="$ip"
   VM_MAC="$mac"
 }
@@ -327,7 +334,7 @@ get_vm_ip_and_mac() {
 # post_install
 # =============================================================================
 post_install() {
-  info "Configuración aplicada vía Cloud-Init (SELinux, firewall, timezone, teclado, dnf update)"
+  info "Configuración aplicada vía Cloud-Init (SELinux, timezone, teclado)"
   log "La configuración se aplica automáticamente en el primer arranque"
 }
 
