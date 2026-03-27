@@ -124,8 +124,10 @@ ask_config() {
   read -rp "$(echo -e "Número de cores [${CYAN}${def_cores}${NC}]: ")" CORES
   CORES="${CORES:-$def_cores}"
 
-  read -rp "$(echo -e "RAM en MB [${CYAN}${def_ram}${NC}]: ")" RAM
-  RAM="${RAM:-$def_ram}"
+  local def_ram_gb=$(( def_ram / 1024 ))
+  read -rp "$(echo -e "RAM en GB [${CYAN}${def_ram_gb}${NC}]: ")" RAM_GB
+  RAM_GB="${RAM_GB:-$def_ram_gb}"
+  RAM=$(( RAM_GB * 1024 ))
 
   read -rp "$(echo -e "Tamaño disco en GB [${CYAN}${def_disk}${NC}]: ")" DISK_SIZE
   DISK_SIZE="${DISK_SIZE:-$def_disk}"
