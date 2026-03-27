@@ -250,6 +250,7 @@ runcmd:
   - localectl set-keymap es
   - timedatectl set-timezone Europe/Madrid
   - localectl set-locale LANG=en_US.UTF-8
+  - dnf update -y -q
   - systemctl restart qemu-guest-agent
 EOF
 
@@ -288,13 +289,13 @@ start_vm_and_wait() {
 
   # Esperar a que Cloud-Init termine (dnf update tarda ~3-5 min)
   local spinner='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-  local i=0 waited=0 total=30
+  local i=0 waited=0 total=240
   while [[ $waited -lt $total ]]; do
-    printf "\r  ${CYAN}%s${NC} Aplicando configuración... (%ds/%ds)" \
+    printf "\r  ${CYAN}%s${NC} Actualizando Rocky ${ROCKY_VERSION}... (%ds/%ds)" \
       "${spinner:$((i%10)):1}" "$waited" "$total"
     sleep 3; i=$((i+1)); waited=$((waited+3))
   done
-  printf "\r  ${GREEN}✔${NC} Configuración aplicada                           \n"
+  printf "\r  ${GREEN}✔${NC} Sistema actualizado                              \n"
 }
 
 # =============================================================================
