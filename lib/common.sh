@@ -305,8 +305,17 @@ get_vm_ip_and_mac() {
   while [[ -z "$ip" && $attempts -lt 12 ]]; do
     local ifaces
     ifaces=$(qm agent "$VMID" network-get-interfaces 2>/dev/null)
-    ip=$(echo "$ifaces" | grep -oP '(?<="ip-address":")[^"]+' | grep -v '127.0.0.1' | grep -v '^::' | head -1)
-    mac=$(echo "$ifaces" | grep -oP '(?<="hardware-address":")[^"]+' | grep -v '00:00:00' | head -1)
+    ip=$(echo "$ifaces" \
+      | grep '"ip-address"' \
+      | grep -v '127.0.0.1' \
+      | grep 'ipv4' \
+      | grep -oP '"\d+\.\d+\.\d+\.\d+"' \
+      | tr -d '"' | head -1)
+    mac=$(echo "$ifaces" \
+      | grep '"hardware-address"' \
+      | grep -v '00:00:00:00:00:00' \
+      | grep -oP '([0-9a-f]{2}:){5}[0-9a-f]{2}' \
+      | head -1)
     [[ -z "$ip" ]] && sleep 5
     attempts=$((attempts+1))
   done
