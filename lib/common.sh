@@ -211,8 +211,7 @@ create_vm() {
     --scsi0 "${STORAGE}:${DISK_SIZE},format=${disk_format}" \
     --ide2 "${ISO_STORAGE}:iso/${ROCKY_ISO_NAME},media=cdrom" \
     --boot "order=ide2;scsi0" \
-    --serial0 socket \
-    --vga serial0 \
+    --vga std \
     --agent enabled=1 \
     || error "Fallo al crear la VM ${VMID}"
 
