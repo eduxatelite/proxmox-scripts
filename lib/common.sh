@@ -194,8 +194,16 @@ create_vm() {
   qm importdisk "$VMID" "$img_path" "$STORAGE" --format "$disk_format" \
     || error "Fallo al importar el disco"
 
-  # Asignar el disco importado
-  qm set "$VMID" --scsi0 "${STORAGE}:vm-${VMID}-disk-0,discard=on"
+  # El disco importado queda como 'unusedX' — obtener su nombre exacto
+  local disk_ref
+  disk_ref=$(qm config "$VMID" | grep '^unused' | head -1 | awk -F: '{print $1}')
+  local disk_val
+  disk_val=$(qm config "$VMID" | grep "^${disk_ref}" | cut -d' ' -f2)
+  [[ -z "$disk_val" ]] && error "No se encontró el disco importado en la VM ${VMID}"
+
+  # Asignar el disco importado a scsi0
+  qm set "$VMID" --scsi0 "${disk_val},discard=on" \
+    || error "Fallo al asignar el disco a scsi0"
 
   # Añadir disco Cloud-Init
   qm set "$VMID" --ide2 "${STORAGE}:cloudinit"
