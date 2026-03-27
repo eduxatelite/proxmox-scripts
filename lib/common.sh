@@ -159,9 +159,9 @@ download_rocky_image() {
 
   [[ -f "$img_path" ]] && rm -f "$img_path"
 
-  info "Descargando Rocky ${ROCKY_VERSION}"
+  info "Descargando Rocky ${ROCKY_VERSION}..."
   wget --progress=bar:force -O "$img_path" "$ROCKY_IMG_URL" 2>&1 \
-    || error "No se pudo descargar la ${ROCKY_IMG_NAME}"
+    || error "No se pudo descargar la cloud image."
   log "Cloud image descargada → ${img_path}"
 }
 
@@ -226,8 +226,11 @@ create_vm() {
 
   # Script de usuario que se ejecuta en el primer arranque
   local userdata_file="/tmp/userdata-${VMID}.yml"
-  cat > "$userdata_file" << 'EOF'
+  cat > "$userdata_file" << EOF
 #cloud-config
+hostname: ${VM_NAME}
+fqdn: ${VM_NAME}.local
+manage_etc_hosts: true
 runcmd:
   - sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
   - setenforce 0
@@ -236,9 +239,6 @@ runcmd:
   - timedatectl set-timezone Europe/Madrid
   - localectl set-locale LANG=en_US.UTF-8
   - dnf update -y -q
-  - sed -i 's/^#.*allow-rpcs.*/allow-rpcs = "guest-exec guest-exec-status"/' /etc/qemu-guest-agent/qemu-ga.conf
-  - echo '[general]' > /etc/qemu-guest-agent/qemu-ga.conf
-  - echo 'allow-rpcs = guest-exec,guest-exec-status,guest-file-open,guest-file-close,guest-file-read,guest-file-write,guest-file-seek,guest-file-flush' >> /etc/qemu-guest-agent/qemu-ga.conf
   - systemctl restart qemu-guest-agent
 EOF
 
@@ -265,7 +265,7 @@ start_vm_and_wait() {
   info "Arrancando VM ${VMID}..."
   qm start "$VMID" || error "No se pudo arrancar la VM"
 
-  info "Esperando a que Rocky arranque (cloud image ~30 segundos)..."
+  info "Esperando a que Rocky arranque..."
   local timeout=300 elapsed=0
   while ! qm agent "$VMID" ping &>/dev/null; do
     sleep 5; elapsed=$((elapsed+5))
@@ -273,7 +273,22 @@ start_vm_and_wait() {
     printf "."
   done
   echo ""
-  log "VM lista"
+  log "VM lista — Rocky arrancado"
+
+  # Esperar a que Cloud-Init termine (dnf update puede tardar)
+  info "Actualizando Rocky ${ROCKY_VERSION} y aplicando configuración..."
+  local spinner='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0 waited=0
+  # Cloud-Init escribe /var/lib/cloud/instance/boot-finished cuando termina
+  while true; do
+    local done
+    done=$(qm agent "$VMID" exec bash -c "test -f /var/lib/cloud/instance/boot-finished && echo yes" 2>/dev/null | grep -o yes || true)
+    [[ "$done" == "yes" ]] && break
+    printf "\r  ${CYAN}%s${NC} Actualizando sistema... (%ds)" "${spinner:$((i%10)):1}" "$waited"
+    sleep 3; i=$((i+1)); waited=$((waited+3))
+    [[ $waited -ge 600 ]] && break  # máximo 10 min
+  done
+  printf "\r  ${GREEN}✔${NC} Sistema actualizado y configurado        \n"
 }
 
 # =============================================================================
@@ -281,8 +296,6 @@ start_vm_and_wait() {
 # =============================================================================
 get_vm_ip_and_mac() {
   local ip="" mac="" attempts=0
-  info "Esperando a que la red esté disponible..."
-  sleep 10
   while [[ -z "$ip" && $attempts -lt 12 ]]; do
     local ifaces
     ifaces=$(qm agent "$VMID" network-get-interfaces 2>/dev/null)
