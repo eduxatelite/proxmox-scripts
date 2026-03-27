@@ -113,6 +113,12 @@ ask_config() {
   echo ""
   read -rp "Nombre de la VM [${def_name}]: " VM_NAME
   VM_NAME="${VM_NAME:-$def_name}"
+  # Validar nombre: solo letras, números y guiones (no guión bajo)
+  while [[ ! "$VM_NAME" =~ ^[a-zA-Z0-9-]+$ ]]; do
+    warn "Nombre inválido — solo letras, números y guiones (-). Sin espacios ni guiones bajos (_)."
+    read -rp "Nombre de la VM [${def_name}]: " VM_NAME
+    VM_NAME="${VM_NAME:-$def_name}"
+  done
 
   read -rp "Número de cores [${def_cores}]: " CORES
   CORES="${CORES:-$def_cores}"
@@ -153,7 +159,7 @@ download_rocky_image() {
   local img_path="/tmp/${ROCKY_IMG_NAME}"
 
   if [[ -f "$img_path" && -s "$img_path" ]]; then
-    log "Cloud image ya existe en ${img_path}"
+    log "Imagen ya existe en ${img_path}"
     return 0
   fi
 
