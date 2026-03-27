@@ -17,9 +17,9 @@ main() {
   start_vm_and_wait
   post_install
 
-  info "Obteniendo IP..."
-  VM_IP=$(get_vm_ip)
-  print_summary "$VM_IP"
+  info "Obteniendo IP y MAC..."
+  get_vm_ip_and_mac
+  print_summary "$VM_IP" "$VM_MAC"
 }
 
 main "$@"
