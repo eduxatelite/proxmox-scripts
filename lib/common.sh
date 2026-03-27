@@ -276,22 +276,26 @@ get_vm_ip_and_mac() {
 post_install() {
   info "Aplicando configuración post-instalación..."
 
-  # Copiar script dentro de la VM vía guest agent file-write
-  qm agent "$VMID" exec -- bash -c "cat > /tmp/post-install.sh << 'ENDOFSCRIPT'
-#!/bin/bash
-sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
-setenforce 0 2>/dev/null || true
-systemctl disable --now firewalld 2>/dev/null || true
-localectl set-keymap es 2>/dev/null || true
-timedatectl set-timezone Europe/Madrid 2>/dev/null || true
-localectl set-locale LANG=en_US.UTF-8 2>/dev/null || true
-dnf update -y -q
-systemctl enable --now qemu-guest-agent 2>/dev/null || true
-ENDOFSCRIPT
-chmod +x /tmp/post-install.sh
-bash /tmp/post-install.sh" \
-    && log "Configuración aplicada" \
-    || warn "Algún paso falló — revisa manualmente"
+  local cmds=(
+    "sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config"
+    "setenforce 0"
+    "systemctl disable --now firewalld"
+    "localectl set-keymap es"
+    "timedatectl set-timezone Europe/Madrid"
+    "localectl set-locale LANG=en_US.UTF-8"
+    "dnf update -y -q"
+    "systemctl enable --now qemu-guest-agent"
+  )
+
+  local ok=true
+  for cmd in "${cmds[@]}"; do
+    qm agent "$VMID" exec -- bash -c "$cmd" &>/dev/null || {
+      warn "Falló: $cmd"
+      ok=false
+    }
+  done
+
+  $ok && log "Configuración aplicada" || warn "Algunos pasos fallaron — revisa manualmente"
 }
 
 # =============================================================================
