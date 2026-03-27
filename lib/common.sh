@@ -203,7 +203,7 @@ create_vm() {
   qm create "$VMID" \
     --name "$VM_NAME" \
     --ostype l26 \
-    --machine i440fx \
+    --machine pc \
     --bios seabios \
     --sockets 1 \
     --cores "$CORES" \
