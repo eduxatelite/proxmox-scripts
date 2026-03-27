@@ -237,6 +237,12 @@ create_vm() {
 hostname: ${VM_NAME}
 fqdn: ${VM_NAME}.local
 manage_etc_hosts: true
+chpasswd:
+  list: |
+    root:${CI_PASSWORD}
+  expire: false
+ssh_pwauth: true
+disable_root: false
 runcmd:
   - sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
   - setenforce 0
@@ -244,7 +250,6 @@ runcmd:
   - localectl set-keymap es
   - timedatectl set-timezone Europe/Madrid
   - localectl set-locale LANG=en_US.UTF-8
-  - dnf update -y -q
   - systemctl restart qemu-guest-agent
 EOF
 
@@ -281,20 +286,15 @@ start_vm_and_wait() {
   echo ""
   log "VM lista — Rocky arrancado"
 
-  # Esperar a que Cloud-Init termine (dnf update puede tardar)
-  info "Actualizando Rocky ${ROCKY_VERSION} y aplicando configuración..."
+  # Esperar a que Cloud-Init termine (dnf update tarda ~3-5 min)
   local spinner='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-  local i=0 waited=0
-  # Cloud-Init escribe /var/lib/cloud/instance/boot-finished cuando termina
-  while true; do
-    local done
-    done=$(qm agent "$VMID" exec bash -c "test -f /var/lib/cloud/instance/boot-finished && echo yes" 2>/dev/null | grep -o yes || true)
-    [[ "$done" == "yes" ]] && break
-    printf "\r  ${CYAN}%s${NC} Actualizando sistema... (%ds)" "${spinner:$((i%10)):1}" "$waited"
+  local i=0 waited=0 total=30
+  while [[ $waited -lt $total ]]; do
+    printf "\r  ${CYAN}%s${NC} Aplicando configuración... (%ds/%ds)" \
+      "${spinner:$((i%10)):1}" "$waited" "$total"
     sleep 3; i=$((i+1)); waited=$((waited+3))
-    [[ $waited -ge 600 ]] && break  # máximo 10 min
   done
-  printf "\r  ${GREEN}✔${NC} Sistema actualizado y configurado        \n"
+  printf "\r  ${GREEN}✔${NC} Configuración aplicada                           \n"
 }
 
 # =============================================================================
