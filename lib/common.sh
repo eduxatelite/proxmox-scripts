@@ -203,8 +203,6 @@ create_vm() {
   qm create "$VMID" \
     --name "$VM_NAME" \
     --ostype l26 \
-    --machine pc \
-    --bios seabios \
     --sockets 1 \
     --cores "$CORES" \
     --cpu x86-64-v3 \
