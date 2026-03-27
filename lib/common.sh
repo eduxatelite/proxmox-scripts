@@ -307,17 +307,27 @@ get_vm_ip_and_mac() {
   while [[ -z "$ip" && $attempts -lt 24 ]]; do
     local ifaces
     ifaces=$(qm agent "$VMID" network-get-interfaces 2>/dev/null)
-    ip=$(echo "$ifaces" \
-      | grep '"ip-address"' \
-      | grep -v '127.0.0.1' \
-      | grep 'ipv4' \
-      | grep -oP '"\d+\.\d+\.\d+\.\d+"' \
-      | tr -d '"' | head -1)
-    mac=$(echo "$ifaces" \
-      | grep '"hardware-address"' \
-      | grep -v '00:00:00:00:00:00' \
-      | grep -oP '([0-9a-f]{2}:){5}[0-9a-f]{2}' \
-      | head -1)
+    # Extraer IPs IPv4 ignorando loopback
+    ip=$(echo "$ifaces" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for iface in data:
+    if iface.get('name') == 'lo':
+        continue
+    for addr in iface.get('ip-addresses', []):
+        if addr.get('ip-address-type') == 'ipv4':
+            print(addr['ip-address'])
+            sys.exit()
+" 2>/dev/null)
+    mac=$(echo "$ifaces" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for iface in data:
+    hw = iface.get('hardware-address','')
+    if hw and hw != '00:00:00:00:00:00':
+        print(hw)
+        sys.exit()
+" 2>/dev/null)
     if [[ -z "$ip" ]]; then
       printf "\r  ${CYAN}%s${NC} Esperando IP por DHCP..." "${spinner:$((i%10)):1}"
       sleep 5
