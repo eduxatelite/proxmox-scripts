@@ -137,7 +137,7 @@ ask_config() {
   echo -e "  Cores    : ${CYAN}${CORES}${NC}  |  RAM: ${CYAN}${RAM_GB} GB${NC}"
   echo -e "  Disco    : ${CYAN}${DISK_SIZE} GB${NC} en ${CYAN}${STORAGE}${NC}"
   echo -e "  Red      : ${CYAN}${BRIDGE}${NC}${VLAN_TAG:+ (VLAN ${VLAN_TAG})}"
-  echo -e "  Rocky    : ${CYAN}${ROCKY_VERSION}${NC} (Cloud Image)"
+  echo -e "  Rocky    : ${CYAN}${ROCKY_VERSION}${NC}"
   echo -e "${BLUE}══════════════════════════════════════${NC}"
   echo ""
 
