@@ -189,6 +189,15 @@ create_vm() {
 
   qm status "$VMID" &>/dev/null && error "Ya existe una VM con ID ${VMID}"
 
+  # Detectar tipo de storage para elegir el formato correcto
+  local storage_type
+  storage_type=$(pvesm status 2>/dev/null | awk -v s="$STORAGE" '$1==s {print $2}')
+  local disk_format="qcow2"
+  if [[ "$storage_type" == "lvmthin" || "$storage_type" == "lvm" || "$storage_type" == "zfspool" ]]; then
+    disk_format="raw"
+  fi
+  info "Storage tipo '${storage_type}' → usando formato ${disk_format}"
+
   qm create "$VMID" \
     --name "$VM_NAME" \
     --ostype l26 \
@@ -197,7 +206,7 @@ create_vm() {
     --memory "$RAM" \
     --net0 "virtio,bridge=${BRIDGE}" \
     --scsihw virtio-scsi-pci \
-    --scsi0 "${STORAGE}:${DISK_SIZE},format=qcow2" \
+    --scsi0 "${STORAGE}:${DISK_SIZE},format=${disk_format}" \
     --ide2 "${ISO_STORAGE}:iso/${ROCKY_ISO_NAME},media=cdrom" \
     --boot "order=ide2;scsi0" \
     --serial0 socket \
