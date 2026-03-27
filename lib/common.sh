@@ -276,8 +276,8 @@ get_vm_ip_and_mac() {
 post_install() {
   info "Aplicando configuración post-instalación..."
 
-  local script="/tmp/post-install-${VMID}.sh"
-  cat > "$script" << 'EOF'
+  # Copiar script dentro de la VM vía guest agent file-write
+  qm agent "$VMID" exec -- bash -c "cat > /tmp/post-install.sh << 'ENDOFSCRIPT'
 #!/bin/bash
 sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
 setenforce 0 2>/dev/null || true
@@ -287,13 +287,11 @@ timedatectl set-timezone Europe/Madrid 2>/dev/null || true
 localectl set-locale LANG=en_US.UTF-8 2>/dev/null || true
 dnf update -y -q
 systemctl enable --now qemu-guest-agent 2>/dev/null || true
-EOF
-
-  qm agent "$VMID" exec -- bash -s < "$script" \
+ENDOFSCRIPT
+chmod +x /tmp/post-install.sh
+bash /tmp/post-install.sh" \
     && log "Configuración aplicada" \
     || warn "Algún paso falló — revisa manualmente"
-
-  rm -f "$script"
 }
 
 # =============================================================================
