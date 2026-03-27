@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# rocky-base.sh — VM base Rocky 9.6 (Cloud Image, sin software adicional)
+# rocky-base.sh — VM base Rocky 9.7 (Cloud Image, sin software adicional)
 # Uso: bash <(curl -fsSL https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/base/rocky-base.sh)
 # =============================================================================
 
