@@ -203,12 +203,15 @@ create_vm() {
   qm create "$VMID" \
     --name "$VM_NAME" \
     --ostype l26 \
+    --machine i440fx \
+    --bios seabios \
     --sockets 1 \
     --cores "$CORES" \
+    --cpu x86-64-v3 \
     --memory "$RAM" \
     --net0 "virtio,bridge=${BRIDGE}" \
-    --scsihw virtio-scsi-pci \
-    --scsi0 "${STORAGE}:${DISK_SIZE},format=${disk_format}" \
+    --scsihw virtio-scsi-single \
+    --scsi0 "${STORAGE}:${DISK_SIZE},format=${disk_format},iothread=1" \
     --ide2 "${ISO_STORAGE}:iso/${ROCKY_ISO_NAME},media=cdrom" \
     --boot "order=ide2;scsi0" \
     --vga std \
