@@ -132,21 +132,6 @@ Press OK to continue."
 # =============================================================================
 step "Checking Docker"
 
-install_docker_debian() {
-  info "Installing Docker on Debian/Ubuntu…"
-  apt-get update -qq
-  apt-get install -y ca-certificates curl gnupg lsb-release &>/dev/null
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/"${DISTRO}"/gpg \
-    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-    https://download.docker.com/linux/${DISTRO} $(lsb_release -cs) stable" \
-    > /etc/apt/sources.list.d/docker.list
-  apt-get update -qq
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin &>/dev/null
-}
-
 install_docker_rhel() {
   info "Installing Docker on RHEL/Rocky/CentOS…"
   # disable exit-on-error during package install (warnings can return non-zero)
@@ -524,16 +509,37 @@ step "Starting containers"
 cd "${INSTALL_DIR}"
 
 info "Building images (this may take a few minutes the first time)…"
-run_with_spinner "Building Docker images…" docker compose build --quiet
+if ! docker compose build > /tmp/deadline-build.log 2>&1; then
+  err "Docker build failed. Last 20 lines of log:"
+  tail -20 /tmp/deadline-build.log
+  die "Fix the error above, then re-run the installer."
+fi
 ok "Images built"
 
 info "Starting all services…"
-run_with_spinner "Starting containers…" docker compose up -d
+if ! docker compose up -d > /tmp/deadline-up.log 2>&1; then
+  err "Failed to start containers. Last 20 lines of log:"
+  tail -20 /tmp/deadline-up.log
+  die "Fix the error above, then run: cd ${INSTALL_DIR} && docker compose up -d"
+fi
 ok "All containers started"
 
 # ── verify ────────────────────────────────────────────────────────────────────
 sleep 3
-RUNNING=$(docker compose ps --status running --format json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d))" 2>/dev/null || echo "?")
+RUNNING=$(docker compose ps --format json 2>/dev/null \
+  | python3 -c "
+import sys, json
+raw = sys.stdin.read().strip()
+if not raw:
+    print('0'); sys.exit()
+try:
+    d = json.loads(raw)
+    items = d if isinstance(d, list) else [d]
+    running = sum(1 for x in items if x.get('State','') == 'running')
+    print(running)
+except Exception:
+    print('?')
+" 2>/dev/null || echo "?")
 ok "Containers running: ${RUNNING}/4"
 
 # ── detect server IP ──────────────────────────────────────────────────────────
