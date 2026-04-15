@@ -17,8 +17,8 @@ header() { echo -e "\n${BLUE}═════════════════
 
 # --- Rocky 9.7 ---
 ROCKY_VERSION="9.7"
-ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-6.x86_64.qcow2"
-ROCKY_IMG_NAME="Rocky-9-6.x86_64.qcow2"
+ROCKY_IMG_URL="http://ftp.madrid.xatelite.com:5005/2026/Rocky-9-7.x86_64.qcow2"
+ROCKY_IMG_NAME="Rocky-9-7.x86_64.qcow2"
 
 # --- Cloud-Init ---
 CI_USER="root"
