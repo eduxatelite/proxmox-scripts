@@ -83,7 +83,7 @@ ask_config() {
   local bridges=()
   while IFS= read -r line; do
     bridges+=("$line")
-  done < <(ip link show | awk -F': ' '/^[0-9]+: / && $2 !~ /^(lo|eth|ens|enp|bond|dummy|sit|tun|tap|wlan|docker|veth|virbr)/ {gsub("@.*","",$2); print $2}' | grep -v '^$')
+  done < <(brctl show 2>/dev/null | awk 'NR>1 && /^[a-zA-Z]/ {print $1}')
 
   if [[ ${#bridges[@]} -eq 0 ]]; then
     warn "No se detectaron bridges. Usando 'vmbr0'."
