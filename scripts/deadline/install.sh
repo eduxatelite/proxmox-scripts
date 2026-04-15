@@ -9,7 +9,7 @@
 #
 #  github.com/eduxatelite/proxmox-scripts
 # =============================================================================
-set -euo pipefail
+set -uo pipefail
 
 # ── colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'
@@ -23,12 +23,23 @@ step() { echo -e "\n${BLD}${CYN}══ $* ${RST}"; }
 die()  { err "$*"; exit 1; }
 
 spinner() {
-  local pid=$! chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
-  while kill -0 "$pid" 2>/dev/null; do
-    printf "\r  ${BLU}%s${RST}  %s " "${chars:$((i%10)):1}" "$1"
-    ((i++)); sleep 0.1
+  local msg="$1" chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+  while true; do
+    printf "\r  ${BLU}%s${RST}  %s " "${chars:$((i%10)):1}" "$msg"
+    ((i++)); sleep 0.2
   done
-  printf "\r"
+}
+
+run_with_spinner() {
+  local msg="$1"; shift
+  spinner "$msg" &
+  local spin_pid=$!
+  "$@"
+  local ret=$?
+  kill "$spin_pid" 2>/dev/null
+  wait "$spin_pid" 2>/dev/null
+  printf "\r\033[K"
+  return $ret
 }
 
 # ── whiptail helpers ──────────────────────────────────────────────────────────
@@ -138,15 +149,35 @@ install_docker_debian() {
 
 install_docker_rhel() {
   info "Installing Docker on RHEL/Rocky/CentOS…"
+  # disable exit-on-error during package install (warnings can return non-zero)
+  set +e
   if command -v dnf &>/dev/null; then
-    dnf install -y yum-utils &>/dev/null
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo &>/dev/null
-    dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin &>/dev/null
+    dnf install -y yum-utils            >> /tmp/docker-install.log 2>&1
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >> /tmp/docker-install.log 2>&1
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >> /tmp/docker-install.log 2>&1
   else
-    yum install -y yum-utils &>/dev/null
-    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo &>/dev/null
-    yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin &>/dev/null
+    yum install -y yum-utils            >> /tmp/docker-install.log 2>&1
+    yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo >> /tmp/docker-install.log 2>&1
+    yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >> /tmp/docker-install.log 2>&1
   fi
+  set -e
+}
+
+install_docker_debian() {
+  info "Installing Docker on Debian/Ubuntu…"
+  set +e
+  apt-get update -qq >> /tmp/docker-install.log 2>&1
+  apt-get install -y ca-certificates curl gnupg lsb-release >> /tmp/docker-install.log 2>&1
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/"${DISTRO}"/gpg \
+    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/${DISTRO} $(lsb_release -cs) stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -qq >> /tmp/docker-install.log 2>&1
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >> /tmp/docker-install.log 2>&1
+  set -e
 }
 
 if command -v docker &>/dev/null; then
@@ -164,18 +195,24 @@ Distribution detected: ${DISTRO}
 Press OK to install Docker."
 
   step "Installing Docker"
+  echo "" > /tmp/docker-install.log
+
   if is_debian_based; then
-    install_docker_debian &
+    install_docker_debian
   elif is_rhel_based; then
-    install_docker_rhel &
+    install_docker_rhel
   else
     die "Unsupported distribution: ${DISTRO}. Please install Docker manually: https://docs.docker.com/engine/install/"
   fi
-  spinner "Installing Docker…"
-  wait $!
 
-  systemctl enable docker &>/dev/null
-  systemctl start docker
+  # verify Docker actually installed
+  if ! command -v docker &>/dev/null; then
+    err "Docker installation failed. Check /tmp/docker-install.log for details."
+    die "Run: cat /tmp/docker-install.log"
+  fi
+
+  systemctl enable docker >> /tmp/docker-install.log 2>&1 || true
+  systemctl start docker  || die "Failed to start Docker. Check: journalctl -u docker"
   ok "Docker installed successfully"
 fi
 
@@ -486,17 +523,13 @@ EOF
 step "Starting containers"
 cd "${INSTALL_DIR}"
 
-info "Building exporter image…"
-docker compose build --quiet &
-spinner "Building Deadline Exporter image…"
-wait $!
-ok "Image built"
+info "Building images (this may take a few minutes the first time)…"
+run_with_spinner "Building Docker images…" docker compose build --quiet
+ok "Images built"
 
-info "Starting services…"
-docker compose up -d &
-spinner "Starting all services…"
-wait $!
-ok "All containers running"
+info "Starting all services…"
+run_with_spinner "Starting containers…" docker compose up -d
+ok "All containers started"
 
 # ── verify ────────────────────────────────────────────────────────────────────
 sleep 3
