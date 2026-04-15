@@ -57,8 +57,8 @@ function mapJobStat(stat) {
 
 function parseWorkers(raw = []) {
   return raw.map(w => ({
-    id:     w.Name ?? w.MachineName ?? "unknown",
-    job:    w.RenderingJob || "—",
+    id:     w.SlvName ?? w.Name ?? w.MachineName ?? "unknown",
+    job:    w.SlaveInfo?.CurrentJob ?? w.RenderingJob ?? "—",
     pool:   w.Pool || "—",
     cpu:    Math.round(w.SlaveInfo?.MachineInfo?.CpuUsage ?? 0),
     status: mapSlaveStatus(w.SlaveStatus),
@@ -632,7 +632,7 @@ export default function DeadlineDashboard() {
       <div style={{ background: "#0d0f13", borderBottom: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 28, height: 28, borderRadius: 6, background: "linear-gradient(135deg,#f46800,#fa9f3a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#fff" }}>D</div>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>Deadline Farm Monitor</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>Deadline Dashboard</span>
           <span style={{ background: "#2a2d3a", borderRadius: 10, padding: "2px 10px", fontSize: 11, color: C.muted }}>Production</span>
         </div>
         <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
@@ -896,7 +896,7 @@ export default function DeadlineDashboard() {
         </div>
 
         <div style={{ textAlign: "center", color: C.muted, fontSize: 11, marginTop: 4 }}>
-          Deadline Farm Monitor · Auto-refresh every {REFRESH_INTERVAL}s
+          Deadline Dashboard · Auto-refresh every {REFRESH_INTERVAL}s
         </div>
       </div>
 
