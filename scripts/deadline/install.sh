@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Deadline Farm Monitor — Docker Installer
+#  Deadline Dashboard — Docker Installer
 #  Works on any Linux distro with or without Docker pre-installed.
 #  Installs: Docker (if needed) · Prometheus · Deadline Exporter · Grafana
 #
@@ -217,8 +217,8 @@ wt_input STUDIO_NAME "Studio Name" \
   "My Studio"
 
 wt_input INSTALL_DIR "Install Directory" \
-  "Where should the monitor be installed?" \
-  "/opt/deadline-monitor"
+  "Where should the dashboard be installed?" \
+  "/opt/deadline-dashboard"
 
 # =============================================================================
 # STEP 3 — Grafana admin password
@@ -234,7 +234,7 @@ Username will be: admin"
 wt_password GRAFANA_PASS "Grafana Admin Password" \
   "Enter a password for the Grafana admin user:"
 
-[[ -z "$GRAFANA_PASS" ]] && GRAFANA_PASS="deadlinemonitor"
+[[ -z "$GRAFANA_PASS" ]] && GRAFANA_PASS="deadlinedashboard"
 
 # =============================================================================
 # STEP 4 — Deadline Web Service connection
@@ -373,7 +373,7 @@ Press OK to start the installation."
 # =============================================================================
 # STEP 7 — Deploy
 # =============================================================================
-step "Deploying Deadline Farm Monitor"
+step "Deploying Deadline Dashboard"
 
 REPO_RAW="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/deadline"
 
@@ -447,7 +447,7 @@ services:
     ports:
       - "${PORT_DASHBOARD}:${PORT_DASHBOARD}"
     networks:
-      - monitor
+      - dashboard
 
   # ── Prometheus exporter (reads Deadline API → exposes metrics) ──────────────
   deadline-exporter:
@@ -460,7 +460,7 @@ services:
     ports:
       - "${PORT_EXPORTER}:${PORT_EXPORTER}"
     networks:
-      - monitor
+      - dashboard
 
   # ── Prometheus (stores metrics history) ────────────────────────────────────
   prometheus:
@@ -476,7 +476,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
     networks:
-      - monitor
+      - dashboard
 
   # ── Grafana (graphs / alerts / historical data) ─────────────────────────────
   grafana:
@@ -493,14 +493,14 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     networks:
-      - monitor
+      - dashboard
 
 volumes:
   prometheus_data:
   grafana_data:
 
 networks:
-  monitor:
+  dashboard:
     driver: bridge
 EOF
 
