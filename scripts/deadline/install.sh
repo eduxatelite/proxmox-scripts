@@ -104,8 +104,8 @@ clear
 echo -e "${BLD}${CYN}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════════════════════╗
-  ║         DEADLINE FARM MONITOR — Docker Installer            ║
-  ║         github.com/eduxatelite/proxmox-scripts              ║
+  ║            DEADLINE DASHBOARD — Docker Installer            ║
+  ║            github.com/eduxatelite/proxmox-scripts           ║
   ╚══════════════════════════════════════════════════════════════╝
 BANNER
 echo -e "${RST}"
@@ -114,8 +114,8 @@ detect_distro
 ensure_curl
 ensure_whiptail
 
-wt_msg "Deadline Farm Monitor" \
-"Welcome to the Deadline Farm Monitor installer.
+wt_msg "Deadline Dashboard" \
+"Welcome to the Deadline Dashboard installer.
 
 This script will:
 
@@ -552,7 +552,7 @@ clear
 echo -e "${BLD}${GRN}"
 cat << DONE
   ╔══════════════════════════════════════════════════════════════╗
-  ║          DEADLINE FARM MONITOR — Installation Complete       ║
+  ║           DEADLINE DASHBOARD — Installation Complete         ║
   ╚══════════════════════════════════════════════════════════════╝
 DONE
 echo -e "${RST}"
