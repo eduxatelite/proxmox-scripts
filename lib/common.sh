@@ -83,7 +83,8 @@ ask_config() {
   local bridges=()
   while IFS= read -r line; do
     bridges+=("$line")
-  done < <(brctl show 2>/dev/null | awk 'NR>1 && /^[a-zA-Z]/ {print $1}')
+  done < <(grep -h '^iface.*inet' /etc/network/interfaces /etc/network/interfaces.d/* 2>/dev/null \
+    | awk '{print $2}' | grep -v 'lo' | sort -u)
 
   if [[ ${#bridges[@]} -eq 0 ]]; then
     warn "No se detectaron bridges. Usando 'vmbr0'."
