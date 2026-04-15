@@ -100,6 +100,20 @@ def proxy(path):
         )
 
 
+# ── debug endpoint (shows raw Deadline API response) ─────────────────────────
+
+@app.route("/debug/slaves")
+def debug_slaves():
+    """Return first 2 workers raw so we can inspect field names."""
+    try:
+        r = requests.get(f"{BASE_URL}/api/slaves", headers=dl_headers(), timeout=10)
+        data = r.json()
+        sample = data[:2] if isinstance(data, list) else data
+        return jsonify({"count": len(data) if isinstance(data, list) else 1, "sample": sample})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── health endpoint ───────────────────────────────────────────────────────────
 
 @app.route("/health")
