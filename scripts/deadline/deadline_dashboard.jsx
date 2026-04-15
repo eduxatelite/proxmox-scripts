@@ -41,42 +41,33 @@ async function dlDelete(path) {
 }
 
 // ── data mappers ──────────────────────────────────────────────────────────────
-function mapSlaveStatus(s) {
-  if (!s) return "offline";
-  const v = String(s).toLowerCase().trim();
-  if (v.includes("render"))   return "active";
-  if (v === "idle")           return "idle";
-  if (v === "disabled")       return "disabled";
-  if (v === "stalled")        return "stalled";
-  return "offline"; // Offline, Unknown, etc.
+function mapWorkerStat(stat, enabled) {
+  // Deadline worker Info.Stat: 0=Unknown,1=Rendering,2=Idle,3=Offline,4=Disabled,5=Stalled
+  if (enabled === false) return "disabled";
+  const m = { 1: "active", 2: "idle", 4: "disabled", 5: "stalled" };
+  return m[stat] ?? "offline"; // 0=Unknown, 3=Offline → offline
 }
 
 function mapJobStat(stat) {
-  // Deadline Stat: 0=Unknown,1=Active,2=Suspended,3=Completed,4=Failed,5=Pending
+  // Deadline Job Props.Stat: 0=Unknown,1=Active,2=Suspended,3=Completed,4=Failed,5=Pending
   const m = { 0:"queued", 1:"rendering", 2:"suspended", 3:"completed", 4:"failed", 5:"queued" };
   return m[stat] ?? "queued";
 }
 
-function getRawStatus(w) {
-  // Try every known location Deadline uses across versions
-  return w.SlaveStatus
-    ?? w.Status
-    ?? w.SlaveInfo?.Status
-    ?? w.SlaveInfo?.SlaveStatus
-    ?? w.SlaveInfo?.State
-    ?? "";
-}
-
 function parseWorkers(raw = []) {
   return raw.map(w => {
-    const rawSt = getRawStatus(w);
+    const info     = w.Info     ?? w;          // real API wraps data in Info{}
+    const settings = w.Settings ?? {};
+    const stat     = info.Stat  ?? 0;
+    const enabled  = settings.Enable !== false;
     return {
-      id:      w.SlvName ?? w.Name ?? w.MachineName ?? "unknown",
-      job:     w.SlaveInfo?.CurrentJob ?? w.RenderingJob ?? "—",
-      pool:    w.Pool || "—",
-      cpu:     Math.round(w.SlaveInfo?.MachineInfo?.CpuUsage ?? 0),
-      status:  mapSlaveStatus(rawSt),
-      rawSt,   // keep raw for tooltip debugging
+      id:     info.Name ?? info._id ?? "unknown",
+      job:    info.JobName || "—",
+      pool:   info.Pools  || (Array.isArray(settings.Pools) ? settings.Pools[0] : settings.Pools) || "—",
+      cpu:    Math.round(info.CPU ?? 0),
+      status: mapWorkerStat(stat, enabled),
+      rawSt:  stat,
+      ip:     info.IP ?? "",
     };
   });
 }
@@ -331,7 +322,8 @@ function WorkerDot({ w, onContextMenu }) {
           fontSize: 11, color: C.text, lineHeight: 1.8, pointerEvents: "none",
         }}>
           <div style={{ fontWeight: 700, color: col }}>{w.id}</div>
-          <div>Status: <span style={{ color: col }}>{w.status}</span>{w.rawSt && w.rawSt !== w.status && <span style={{ color: C.muted }}> ({w.rawSt})</span>}</div>
+          {w.ip && <div style={{ color: C.muted, fontSize: 10 }}>{w.ip}</div>}
+          <div>Status: <span style={{ color: col }}>{w.status}</span></div>
           <div>Job: {w.job}</div>
           <div>Pool: {w.pool}</div>
           <div>CPU: {w.cpu}%</div>

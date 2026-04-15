@@ -110,25 +110,34 @@ def collect():
     g_up.set(1)
 
     # ── worker metrics ──────────────────────────────────────────────────────
-    status_map = {}
+    # Deadline API: each worker is {"Info": {..., "Stat": <int>, "Pools": "..."}, "Settings": {...}}
+    # Info.Stat codes: 0=Unknown, 1=Rendering, 2=Idle, 3=Offline, 4=Disabled, 5=Stalled
+    WORKER_STAT  = {0:"unknown", 1:"rendering", 2:"idle", 3:"offline", 4:"disabled", 5:"stalled"}
+    status_map   = {}
     pool_workers = {}
 
     for w in workers:
-        status = w.get("SlaveStatus", "Unknown").lower()
+        info     = w.get("Info", w)           # real API nests data in Info{}
+        settings = w.get("Settings", {})
+        enabled  = settings.get("Enable", True)
+        stat_num = info.get("Stat", 0)
+        if not enabled:
+            status = "disabled"
+        else:
+            status = WORKER_STAT.get(stat_num, "unknown")
         status_map[status] = status_map.get(status, 0) + 1
 
-        # per-pool
-        pool = w.get("Pool", "none") or "none"
+        # Info.Pools is a string in this API version
+        pool = info.get("Pools", "none") or "none"
         pool_workers[pool] = pool_workers.get(pool, 0) + 1
 
     g_workers_active.set(status_map.get("rendering", 0))
     g_workers_idle.set(status_map.get("idle", 0))
     g_workers_offline.set(
         status_map.get("offline", 0) +
-        status_map.get("disabled", 0) +
         status_map.get("unknown", 0)
     )
-    g_workers_stalled.set(status_map.get("stalled", 0))
+    g_workers_stalled.set(status_map.get("stalled", 0) + status_map.get("disabled", 0))
     g_workers_total.set(len(workers))
 
     for pool, count in pool_workers.items():
