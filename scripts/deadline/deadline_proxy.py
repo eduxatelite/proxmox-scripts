@@ -52,6 +52,16 @@ def index():
     return send_from_directory("static", "index.html")
 
 
+@app.route("/<path:path>")
+def static_files(path):
+    """Serve any static asset (JS, CSS, fonts, etc.) from the React build."""
+    try:
+        return send_from_directory("static", path)
+    except Exception:
+        # Fall back to index.html for client-side routing
+        return send_from_directory("static", "index.html")
+
+
 # ── Deadline API proxy ────────────────────────────────────────────────────────
 
 @app.route("/api/<path:path>", methods=["GET", "PUT", "DELETE", "POST"])

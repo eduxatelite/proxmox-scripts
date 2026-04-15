@@ -408,7 +408,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:${PORT_PROM}
+    url: http://prometheus:9090
     isDefault: true
 EOF
 
