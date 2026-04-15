@@ -1,0 +1,33 @@
+# ── Stage 1: build React app ──────────────────────────────────────────────────
+FROM node:18-alpine AS builder
+WORKDIR /build
+
+# minimal package.json for Vite + React build
+RUN echo '{"name":"deadline-monitor","private":true,"version":"1.0.0","type":"module","scripts":{"build":"vite build"},"dependencies":{"react":"^18","react-dom":"^18","recharts":"^2"},"devDependencies":{"@vitejs/plugin-react":"^4","vite":"^5"}}' > package.json
+
+RUN npm install --silent
+
+# vite config
+RUN echo 'import{defineConfig}from"vite";import react from"@vitejs/plugin-react";export default defineConfig({plugins:[react()],build:{outDir:"dist"}})' > vite.config.js
+
+# entry point
+RUN mkdir src && echo 'import React from"react";import{createRoot}from"react-dom/client";import App from"./App.jsx";createRoot(document.getElementById("root")).render(<App/>);' > src/main.jsx
+
+# index.html
+RUN echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Deadline Farm Monitor</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#111217}</style></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>' > index.html
+
+COPY deadline_dashboard.jsx src/App.jsx
+
+RUN npm run build --silent
+
+# ── Stage 2: proxy + serve ────────────────────────────────────────────────────
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN pip install --no-cache-dir flask requests
+
+COPY deadline_proxy.py .
+COPY --from=builder /build/dist ./static
+
+EXPOSE 8080
+CMD ["python", "deadline_proxy.py"]

@@ -325,9 +325,10 @@ esac
 # =============================================================================
 step "Port Configuration"
 
-wt_input PORT_GRAFANA  "Ports" "Grafana dashboard port:"    "3000"
-wt_input PORT_PROM     "Ports" "Prometheus port:"           "9090"
-wt_input PORT_EXPORTER "Ports" "Deadline Exporter port:"    "9100"
+wt_input PORT_DASHBOARD "Ports" "Deadline Dashboard port (main UI):" "8080"
+wt_input PORT_GRAFANA  "Ports" "Grafana port (metrics/graphs):"    "3000"
+wt_input PORT_PROM     "Ports" "Prometheus port:"                  "9090"
+wt_input PORT_EXPORTER "Ports" "Deadline Exporter port:"           "9100"
 
 # =============================================================================
 # STEP 6 — Summary
@@ -339,6 +340,7 @@ wt_msg "Ready to Install" \
   Install dir    : ${INSTALL_DIR}
   Deadline host  : ${DL_HOST}:${DL_PORT}
   Auth           : ${DL_APIKEY:+Enabled}${DL_APIKEY:-Disabled}
+  Dashboard port : ${PORT_DASHBOARD}
   Grafana port   : ${PORT_GRAFANA}
   Prometheus port: ${PORT_PROM}
   Exporter port  : ${PORT_EXPORTER}
@@ -388,15 +390,13 @@ datasources:
     isDefault: true
 EOF
 
-# ── download exporter ─────────────────────────────────────────────────────────
-info "Downloading Deadline Exporter…"
-curl -fsSL "${REPO_RAW}/deadline_exporter.py" -o "${INSTALL_DIR}/deadline_exporter.py" \
-  || die "Failed to download deadline_exporter.py"
-
-# ── download dashboard jsx ────────────────────────────────────────────────────
-info "Downloading React Dashboard…"
-curl -fsSL "${REPO_RAW}/deadline_dashboard.jsx" -o "${INSTALL_DIR}/deadline_dashboard.jsx" \
-  || die "Failed to download deadline_dashboard.jsx"
+# ── download source files ─────────────────────────────────────────────────────
+info "Downloading source files…"
+curl -fsSL "${REPO_RAW}/deadline_exporter.py"   -o "${INSTALL_DIR}/deadline_exporter.py"   || die "Failed to download deadline_exporter.py"
+curl -fsSL "${REPO_RAW}/deadline_proxy.py"      -o "${INSTALL_DIR}/deadline_proxy.py"      || die "Failed to download deadline_proxy.py"
+curl -fsSL "${REPO_RAW}/deadline_dashboard.jsx" -o "${INSTALL_DIR}/deadline_dashboard.jsx" || die "Failed to download deadline_dashboard.jsx"
+curl -fsSL "${REPO_RAW}/Dockerfile.dashboard"   -o "${INSTALL_DIR}/Dockerfile.dashboard"   || die "Failed to download Dockerfile.dashboard"
+ok "Source files downloaded"
 
 # ── Dockerfile for exporter ───────────────────────────────────────────────────
 cat > "${INSTALL_DIR}/Dockerfile.exporter" <<'EOF'
@@ -412,6 +412,22 @@ info "Writing docker-compose.yml…"
 cat > "${INSTALL_DIR}/docker-compose.yml" <<EOF
 services:
 
+  # ── Main interactive dashboard (React + proxy) ──────────────────────────────
+  deadline-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: deadline-dashboard
+    restart: unless-stopped
+    env_file: config/exporter.env
+    environment:
+      - PROXY_PORT=${PORT_DASHBOARD}
+    ports:
+      - "${PORT_DASHBOARD}:${PORT_DASHBOARD}"
+    networks:
+      - monitor
+
+  # ── Prometheus exporter (reads Deadline API → exposes metrics) ──────────────
   deadline-exporter:
     build:
       context: .
@@ -424,6 +440,7 @@ services:
     networks:
       - monitor
 
+  # ── Prometheus (stores metrics history) ────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -439,6 +456,7 @@ services:
     networks:
       - monitor
 
+  # ── Grafana (graphs / alerts / historical data) ─────────────────────────────
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -449,7 +467,6 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS}
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SERVER_ROOT_URL=http://localhost:${PORT_GRAFANA}
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/deadline.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -484,7 +501,7 @@ ok "All containers running"
 # ── verify ────────────────────────────────────────────────────────────────────
 sleep 3
 RUNNING=$(docker compose ps --status running --format json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d))" 2>/dev/null || echo "?")
-ok "Containers running: ${RUNNING}/3"
+ok "Containers running: ${RUNNING}/4"
 
 # ── detect server IP ──────────────────────────────────────────────────────────
 SERVER_IP=$(hostname -I | awk '{print $1}')
@@ -502,7 +519,8 @@ DONE
 echo -e "${RST}"
 
 echo -e "  ${BLD}Access your services:${RST}"
-echo -e "  ${GRN}●${RST}  Grafana Dashboard  →  ${BLD}http://${SERVER_IP}:${PORT_GRAFANA}${RST}  (admin / ${GRAFANA_PASS})"
+echo -e "  ${GRN}●${RST}  ${BLD}Deadline Dashboard →  http://${SERVER_IP}:${PORT_DASHBOARD}${RST}  ← main UI (workers, jobs, actions)"
+echo -e "  ${BLU}●${RST}  Grafana (graphs)   →  http://${SERVER_IP}:${PORT_GRAFANA}  (admin / ${GRAFANA_PASS})"
 echo -e "  ${BLU}●${RST}  Prometheus         →  http://${SERVER_IP}:${PORT_PROM}"
 echo -e "  ${YLW}●${RST}  Deadline Exporter  →  http://${SERVER_IP}:${PORT_EXPORTER}/metrics"
 echo ""
