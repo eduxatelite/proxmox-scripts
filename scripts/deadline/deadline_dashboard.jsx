@@ -43,10 +43,12 @@ async function dlDelete(path) {
 // ── data mappers ──────────────────────────────────────────────────────────────
 function mapSlaveStatus(s) {
   if (!s) return "offline";
-  const v = s.toLowerCase();
-  if (v === "rendering") return "active";
-  if (v === "idle")      return "idle";
-  return "offline"; // Offline, Disabled, Stalled, Unknown
+  const v = String(s).toLowerCase().trim();
+  if (v.includes("render"))   return "active";
+  if (v === "idle")           return "idle";
+  if (v === "disabled")       return "disabled";
+  if (v === "stalled")        return "stalled";
+  return "offline"; // Offline, Unknown, etc.
 }
 
 function mapJobStat(stat) {
@@ -55,14 +57,28 @@ function mapJobStat(stat) {
   return m[stat] ?? "queued";
 }
 
+function getRawStatus(w) {
+  // Try every known location Deadline uses across versions
+  return w.SlaveStatus
+    ?? w.Status
+    ?? w.SlaveInfo?.Status
+    ?? w.SlaveInfo?.SlaveStatus
+    ?? w.SlaveInfo?.State
+    ?? "";
+}
+
 function parseWorkers(raw = []) {
-  return raw.map(w => ({
-    id:     w.SlvName ?? w.Name ?? w.MachineName ?? "unknown",
-    job:    w.SlaveInfo?.CurrentJob ?? w.RenderingJob ?? "—",
-    pool:   w.Pool || "—",
-    cpu:    Math.round(w.SlaveInfo?.MachineInfo?.CpuUsage ?? 0),
-    status: mapSlaveStatus(w.SlaveStatus),
-  }));
+  return raw.map(w => {
+    const rawSt = getRawStatus(w);
+    return {
+      id:      w.SlvName ?? w.Name ?? w.MachineName ?? "unknown",
+      job:     w.SlaveInfo?.CurrentJob ?? w.RenderingJob ?? "—",
+      pool:    w.Pool || "—",
+      cpu:     Math.round(w.SlaveInfo?.MachineInfo?.CpuUsage ?? 0),
+      status:  mapSlaveStatus(rawSt),
+      rawSt,   // keep raw for tooltip debugging
+    };
+  });
 }
 
 function parseJobs(raw = []) {
@@ -95,7 +111,13 @@ function buildPoolData(jobs) {
 }
 
 // ── colour helpers ────────────────────────────────────────────────────────────
-const workerColor = s => ({ active: C.green, idle: C.yellow, offline: C.red }[s] ?? C.muted);
+const workerColor = s => ({
+  active:   C.green,
+  idle:     C.yellow,
+  offline:  C.red,
+  disabled: C.muted,
+  stalled:  C.orange,
+}[s] ?? C.muted);
 const jobColor    = s => ({ rendering: C.blue, queued: C.yellow, failed: C.red, suspended: "#888" }[s] ?? C.muted);
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
@@ -309,7 +331,7 @@ function WorkerDot({ w, onContextMenu }) {
           fontSize: 11, color: C.text, lineHeight: 1.8, pointerEvents: "none",
         }}>
           <div style={{ fontWeight: 700, color: col }}>{w.id}</div>
-          <div>Status: <span style={{ color: col }}>{w.status}</span></div>
+          <div>Status: <span style={{ color: col }}>{w.status}</span>{w.rawSt && w.rawSt !== w.status && <span style={{ color: C.muted }}> ({w.rawSt})</span>}</div>
           <div>Job: {w.job}</div>
           <div>Pool: {w.pool}</div>
           <div>CPU: {w.cpu}%</div>
@@ -850,7 +872,7 @@ export default function DeadlineDashboard() {
                 </div>
               )}
             <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 11 }}>
-              {[["● Active", C.green], ["● Idle", C.yellow], ["● Offline", C.red]].map(([l, c]) => (
+              {[["● Active", C.green], ["● Idle", C.yellow], ["● Offline", C.red], ["● Stalled", C.orange], ["● Disabled", C.muted]].map(([l, c]) => (
                 <span key={l} style={{ color: c }}>{l}</span>
               ))}
             </div>
