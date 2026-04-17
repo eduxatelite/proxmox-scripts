@@ -227,6 +227,9 @@ wt_msg "Ready to Install" \
 
 Press OK to start the installation."
 
+# Detect server IP early so it's available for Grafana config and final URLs
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
 # =============================================================================
 # STEP 6 — Deploy
 # =============================================================================
@@ -337,7 +340,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS}
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SERVER_ROOT_URL=http://localhost:${PORT_GRAFANA}
+      - GF_SERVER_ROOT_URL=http://${SERVER_IP}:${PORT_GRAFANA}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nuke.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -376,7 +379,37 @@ fi
 ok "All containers started"
 
 sleep 4
-SERVER_IP=$(hostname -I | awk '{print $1}')
+
+# ── Enable public dashboard via Grafana API ───────────────────────────────────
+step "Enabling public dashboard link"
+DASH_UID="nuke-rlm-v8"
+PUBLIC_URL=""
+
+# Wait up to 30s for Grafana to be ready
+for i in $(seq 1 15); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    -u "admin:${GRAFANA_PASS}" \
+    "http://localhost:${PORT_GRAFANA}/api/health" 2>/dev/null || true)
+  [[ "$STATUS" == "200" ]] && break
+  sleep 2
+done
+
+PUBLIC_RESP=$(curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -u "admin:${GRAFANA_PASS}" \
+  "http://localhost:${PORT_GRAFANA}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
+  -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
+  2>/dev/null || true)
+
+ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
+  "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" 2>/dev/null || true)
+
+if [[ -n "$ACCESS_TOKEN" ]]; then
+  PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
+  ok "Public dashboard link created"
+else
+  warn "Could not create public link automatically — use Share → Share externally in Grafana"
+fi
 
 # =============================================================================
 # DONE
@@ -395,8 +428,11 @@ echo -e "  ${GRN}●${RST}  ${BLD}Grafana Dashboard  →  http://${SERVER_IP}:${
 echo -e "  ${BLU}●${RST}  Prometheus         →  http://${SERVER_IP}:${PORT_PROM}"
 echo -e "  ${YLW}●${RST}  License Exporter   →  http://${SERVER_IP}:${PORT_EXPORTER}/metrics"
 echo ""
-echo -e "  The Nuke license dashboard loads automatically when you log into Grafana."
+if [[ -n "$PUBLIC_URL" ]]; then
+echo -e "  ${BLD}${GRN}Public dashboard (no login needed):${RST}"
+echo -e "  ${GRN}●${RST}  ${BLD}${PUBLIC_URL}${RST}"
 echo ""
+fi
 echo -e "  ${BLD}Config file:${RST}  ${INSTALL_DIR}/config/exporter.env"
 echo ""
 echo -e "  ${BLD}Useful commands:${RST}"

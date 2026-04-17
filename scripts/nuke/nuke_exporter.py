@@ -107,7 +107,7 @@ def parse_usage(text: str) -> list[dict]:
 
     block = usage_section.group(0)
     line_pattern = re.compile(
-        r"(\w+)\s+v([\d\.]+):\s+(\w+)@([\w\-\.]+)\s+\d+/\d+\s+at"
+        r"(\w+)\s+v([\d\.]+):\s+([\w\.\-]+)@([\w\-\.]+)\s+\d+/\d+\s+at"
     )
     counter: dict = defaultdict(int)
     for m in line_pattern.finditer(block):
