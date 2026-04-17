@@ -111,7 +111,8 @@ def parse_usage(text: str) -> list[dict]:
     )
     counter: dict = defaultdict(int)
     for m in line_pattern.finditer(block):
-        key = (m.group(1).lower(), m.group(2), m.group(3).lower(), m.group(4).lower())
+        user = m.group(3).replace(".", " ").replace("_", " ").title()
+        key = (m.group(1).lower(), m.group(2), user, m.group(4).lower())
         counter[key] += 1
 
     return [
