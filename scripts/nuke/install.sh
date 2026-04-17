@@ -329,6 +329,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SERVER_ROOT_URL=http://${SERVER_IP}:${PORT_GRAFANA}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nuke.json
+      - GF_FEATURE_TOGGLES_ENABLE=dashboardScene publicDashboardsScene
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./nuke_dashboard.json:/var/lib/grafana/dashboards/nuke.json:ro
