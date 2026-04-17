@@ -393,13 +393,20 @@ else
   curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
 
-  # 2. Build import payload via python3 (avoids shell escaping issues with large JSON)
+  # 2. Build import payload — Grafana 11 v2 format needs apiVersion+spec wrapper
   info "Importing dashboard…"
   python3 - <<PYEOF
-import json, sys
+import json
 with open("${INSTALL_DIR}/nuke_dashboard.json") as f:
     dash = json.load(f)
-payload = {"dashboard": dash, "folderUid": "nuke", "overwrite": True}
+uid = dash.get("uid", "nuke-rlm-v8")
+wrapped = {
+    "apiVersion": "dashboard.grafana.app/v2alpha1",
+    "kind": "Dashboard",
+    "metadata": {"name": uid},
+    "spec": dash,
+}
+payload = {"dashboard": wrapped, "folderUid": "nuke", "overwrite": True}
 with open("/tmp/nuke_import_payload.json", "w") as out:
     json.dump(payload, out)
 PYEOF
