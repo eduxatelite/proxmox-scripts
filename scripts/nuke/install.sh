@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  Nuke License Dashboard — Docker Installer
-#  Monitors Foundry / RLM license usage via SSH + rlmutil → Prometheus + Grafana
+#  Monitors Foundry / RLM license usage via rlmutil → Prometheus + Grafana
 #  Works on any Linux distro with or without Docker pre-installed.
 #
 #  Usage:
@@ -126,9 +126,11 @@ wt_msg "Nuke License Dashboard" \
 This script will:
 
   1. Install Docker (if not already installed)
-  2. Generate an SSH key to connect to your RLM license server
-  3. Guide you through authorising that key on the server
-  4. Deploy Prometheus + Grafana with the Nuke dashboard pre-loaded
+  2. Ask for your RLM license server details
+  3. Deploy Prometheus + Grafana with the Nuke dashboard pre-loaded
+
+The rlmutil binary is bundled inside the Docker image — no SSH
+access to your license server is required.
 
 Your RLM license server is NOT modified — this is read-only.
 
@@ -192,160 +194,16 @@ wt_password GRAFANA_PASS "Grafana Password" \
 # =============================================================================
 step "RLM License Server"
 
-wt_msg "RLM License Server" \
-"Now we need the details of your Foundry RLM license server.
-
-You will need:
-  • IP or hostname of the license server
-  • SSH user (usually root)
-  • RLM license port — this is the port shown on the RLM web
-    admin page next to the 'rlm' entry (usually 4101 or 4102)
-
-The installer will generate an SSH key and guide you through
-authorising it on the license server.
-
-Press OK to continue."
-
 wt_input RLM_HOST "RLM License Server" \
   "Enter the IP or hostname of your RLM license server:" \
   "192.168.1.100"
-
-wt_input RLM_SSH_USER "RLM License Server" \
-  "SSH user on the license server:" \
-  "root"
 
 wt_input RLM_PORT "RLM License Server" \
   "RLM license port (shown in the RLM web admin page next to 'rlm'):" \
   "4101"
 
 # =============================================================================
-# STEP 4 — SSH key setup
-# =============================================================================
-step "SSH Key Setup"
-
-KEY_DIR="${INSTALL_DIR}/config"
-KEY_PATH="${KEY_DIR}/id_nuke_rlm"
-mkdir -p "$KEY_DIR"
-
-if [[ -f "$KEY_PATH" ]]; then
-  info "SSH key already exists at ${KEY_PATH}"
-else
-  info "Generating SSH key…"
-  ssh-keygen -t ed25519 -f "$KEY_PATH" -N "" -C "nuke-license-exporter" \
-    || die "Failed to generate SSH key"
-  ok "SSH key generated"
-fi
-
-chmod 600 "$KEY_PATH"
-PUB_KEY=$(cat "${KEY_PATH}.pub")
-
-wt_msg "Authorise SSH Key" \
-"An SSH key has been generated. You must now copy it to
-the license server so the exporter can connect without a password.
-
-Run this command FROM ANOTHER TERMINAL on this machine:
-
-  ssh-copy-id -i ${KEY_PATH}.pub ${RLM_SSH_USER}@${RLM_HOST}
-
-Or manually add this line to ${RLM_SSH_USER}@${RLM_HOST}:~/.ssh/authorized_keys:
-
-  ${PUB_KEY}
-
-Press OK once you have authorised the key."
-
-# ── Test SSH connection ────────────────────────────────────────────────────────
-step "Testing SSH Connection"
-info "Connecting to ${RLM_SSH_USER}@${RLM_HOST}…"
-
-SSH_TEST=$(ssh \
-  -i "$KEY_PATH" \
-  -o StrictHostKeyChecking=no \
-  -o ConnectTimeout=10 \
-  -o BatchMode=yes \
-  "${RLM_SSH_USER}@${RLM_HOST}" \
-  "echo OK" 2>&1 || true)
-
-if [[ "$SSH_TEST" == "OK" ]]; then
-  ok "SSH connection successful"
-else
-  warn "SSH connection failed: ${SSH_TEST}"
-  wt_msg "SSH Connection Failed" \
-"Could not connect via SSH to:
-  ${RLM_SSH_USER}@${RLM_HOST}
-
-Error: ${SSH_TEST}
-
-Please make sure you have:
-  1. Added the public key to ~/.ssh/authorized_keys on the server
-  2. The server is reachable from this machine
-  3. The SSH user is correct
-
-The installer will continue. You can fix SSH access later —
-the exporter will retry automatically on each scrape.
-
-Check connection manually with:
-  ssh -i ${KEY_PATH} ${RLM_SSH_USER}@${RLM_HOST} 'echo OK'"
-fi
-
-# ── Auto-detect rlmutil ────────────────────────────────────────────────────────
-RLMUTIL_PATH=""
-if [[ "$SSH_TEST" == "OK" ]]; then
-  step "Detecting rlmutil"
-  info "Searching for rlmutil on the license server…"
-
-  for CANDIDATE in \
-    "/opt/FoundryLicensingUtility/bin/rlmutil" \
-    "/usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil"; do
-
-    FOUND=$(ssh \
-      -i "$KEY_PATH" \
-      -o StrictHostKeyChecking=no \
-      -o ConnectTimeout=10 \
-      -o BatchMode=yes \
-      "${RLM_SSH_USER}@${RLM_HOST}" \
-      "test -x ${CANDIDATE} && echo FOUND || echo NOTFOUND" 2>/dev/null || echo "NOTFOUND")
-
-    if [[ "$FOUND" == "FOUND" ]]; then
-      RLMUTIL_PATH="$CANDIDATE"
-      ok "rlmutil found at: ${RLMUTIL_PATH}"
-      break
-    fi
-  done
-
-  if [[ -z "$RLMUTIL_PATH" ]]; then
-    warn "rlmutil not found in known locations — will auto-detect at runtime"
-    wt_msg "rlmutil Not Found" \
-"Could not find rlmutil in the standard locations:
-
-  /opt/FoundryLicensingUtility/bin/rlmutil
-  /usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil
-
-The exporter will try to auto-detect it at runtime.
-If it still fails, set RLMUTIL_PATH in:
-  ${INSTALL_DIR}/config/exporter.env"
-  fi
-
-  # Quick license test
-  if [[ -n "$RLMUTIL_PATH" ]]; then
-    info "Running test: ${RLMUTIL_PATH} rlmstat -a -c ${RLM_PORT}@localhost"
-    TEST_OUT=$(ssh \
-      -i "$KEY_PATH" \
-      -o StrictHostKeyChecking=no \
-      -o ConnectTimeout=10 \
-      -o BatchMode=yes \
-      "${RLM_SSH_USER}@${RLM_HOST}" \
-      "${RLMUTIL_PATH} rlmstat -a -c ${RLM_PORT}@localhost" 2>/dev/null | head -5 || true)
-
-    if echo "$TEST_OUT" | grep -qi "license\|rlm\|foundry"; then
-      ok "rlmutil responding — license data looks good"
-    else
-      warn "rlmutil ran but output looks unexpected — check manually"
-    fi
-  fi
-fi
-
-# =============================================================================
-# STEP 5 — Ports
+# STEP 4 — Ports
 # =============================================================================
 step "Port Configuration"
 
@@ -354,15 +212,14 @@ wt_input PORT_PROM      "Ports" "Prometheus port:"           "9091"
 wt_input PORT_EXPORTER  "Ports" "License exporter port:"     "9200"
 
 # =============================================================================
-# STEP 6 — Summary
+# STEP 5 — Summary
 # =============================================================================
 wt_msg "Ready to Install" \
 "Installation Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Studio          : ${STUDIO_NAME}
   Install dir     : ${INSTALL_DIR}
-  RLM server      : ${RLM_SSH_USER}@${RLM_HOST} (port ${RLM_PORT})
-  rlmutil         : ${RLMUTIL_PATH:-auto-detect}
+  RLM server      : ${RLM_HOST} (port ${RLM_PORT})
   Grafana port    : ${PORT_GRAFANA}
   Prometheus port : ${PORT_PROM}
   Exporter port   : ${PORT_EXPORTER}
@@ -371,7 +228,7 @@ wt_msg "Ready to Install" \
 Press OK to start the installation."
 
 # =============================================================================
-# STEP 7 — Deploy
+# STEP 6 — Deploy
 # =============================================================================
 step "Deploying Nuke License Dashboard"
 
@@ -379,17 +236,12 @@ REPO_RAW="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scr
 
 mkdir -p "${INSTALL_DIR}"/{config,prometheus,grafana/provisioning/{datasources,dashboards},grafana/dashboards}
 
-# Copy SSH key to config dir (already there, just set perms)
-chmod 600 "${KEY_PATH}"
-
 # ── exporter config ───────────────────────────────────────────────────────────
 info "Writing configuration…"
 cat > "${INSTALL_DIR}/config/exporter.env" <<EOF
 RLM_HOST=${RLM_HOST}
 RLM_PORT=${RLM_PORT}
-RLM_SSH_USER=${RLM_SSH_USER}
-RLM_SSH_KEY=/config/id_nuke_rlm
-RLMUTIL_PATH=${RLMUTIL_PATH}
+RLMUTIL_PATH=/app/rlmutil
 EXPORTER_PORT=${PORT_EXPORTER}
 SCRAPE_INTERVAL=60
 EOF
@@ -434,9 +286,11 @@ EOF
 
 # ── download source files ─────────────────────────────────────────────────────
 info "Downloading source files…"
-curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"              || die "Failed to download nuke_exporter.py"
-curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"                    || die "Failed to download Dockerfile"
-curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/grafana/dashboards/nuke.json"  || die "Failed to download dashboard JSON"
+curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"             || die "Failed to download nuke_exporter.py"
+curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"                   || die "Failed to download Dockerfile"
+curl -fsSL "${REPO_RAW}/rlmutil"                     -o "${INSTALL_DIR}/rlmutil"                      || die "Failed to download rlmutil binary"
+curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/grafana/dashboards/nuke.json" || die "Failed to download dashboard JSON"
+chmod +x "${INSTALL_DIR}/rlmutil"
 ok "Source files downloaded"
 
 # ── docker-compose.yml ────────────────────────────────────────────────────────
@@ -444,7 +298,7 @@ info "Writing docker-compose.yml…"
 cat > "${INSTALL_DIR}/docker-compose.yml" <<EOF
 services:
 
-  # ── Nuke License Exporter (SSH → rlmutil → Prometheus metrics) ─────────────
+  # ── Nuke License Exporter (rlmutil → Prometheus metrics) ───────────────────
   nuke-exporter:
     build:
       context: .
@@ -452,8 +306,6 @@ services:
     container_name: nuke-exporter
     restart: unless-stopped
     env_file: config/exporter.env
-    volumes:
-      - ./config:/config:ro          # SSH key + exporter.env
     ports:
       - "${PORT_EXPORTER}:${PORT_EXPORTER}"
     networks:
@@ -545,14 +397,10 @@ echo -e "  ${YLW}●${RST}  License Exporter   →  http://${SERVER_IP}:${PORT_E
 echo ""
 echo -e "  The Nuke license dashboard loads automatically when you log into Grafana."
 echo ""
-echo -e "  ${BLD}SSH key location:${RST}  ${KEY_PATH}"
-echo -e "  ${BLD}Config file:${RST}       ${INSTALL_DIR}/config/exporter.env"
+echo -e "  ${BLD}Config file:${RST}  ${INSTALL_DIR}/config/exporter.env"
 echo ""
 echo -e "  ${BLD}Useful commands:${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f nuke-exporter${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose restart${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose down${RST}"
-echo ""
-echo -e "  ${YLW}If the exporter shows errors, verify SSH access:${RST}"
-echo -e "  ${CYN}ssh -i ${KEY_PATH} ${RLM_SSH_USER}@${RLM_HOST} '${RLMUTIL_PATH:-rlmutil} rlmstat -a -c ${RLM_PORT}@localhost'${RST}"
 echo ""

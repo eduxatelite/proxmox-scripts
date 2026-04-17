@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
 Nuke License Dashboard — Prometheus Exporter
-Connects to the RLM license server via SSH and runs rlmutil rlmstat.
-Auto-detects rlmutil in the two known Foundry install locations.
+Runs rlmutil rlmstat directly against the remote RLM server (no SSH needed).
 
 Environment variables (config/exporter.env):
-    RLM_HOST        - IP/hostname of the RLM server
+    RLM_HOST        - IP/hostname of the RLM license server
     RLM_PORT        - RLM license port (default: 4101)
-    RLM_SSH_USER    - SSH user on the license server (default: root)
-    RLM_SSH_KEY     - Path to SSH private key (default: /config/id_nuke_rlm)
-    RLMUTIL_PATH    - Override rlmutil path (auto-detected if empty)
+    RLMUTIL_PATH    - Path to rlmutil binary (default: /app/rlmutil)
     EXPORTER_PORT   - Port this exporter listens on (default: 9200)
     SCRAPE_INTERVAL - Seconds between scrapes (default: 60)
 """
@@ -33,79 +30,27 @@ log = logging.getLogger("nuke_exporter")
 # ── config ─────────────────────────────────────────────────────────────────────
 RLM_HOST        = os.getenv("RLM_HOST",       "localhost")
 RLM_PORT        = os.getenv("RLM_PORT",       "4101")
-RLM_SSH_USER    = os.getenv("RLM_SSH_USER",   "root")
-RLM_SSH_KEY     = os.getenv("RLM_SSH_KEY",    "/config/id_nuke_rlm")
-RLMUTIL_PATH    = os.getenv("RLMUTIL_PATH",   "")           # empty = auto-detect
+RLMUTIL_PATH    = os.getenv("RLMUTIL_PATH",   "/app/rlmutil")
 EXPORTER_PORT   = int(os.getenv("EXPORTER_PORT",   "9200"))
 SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "60"))
 
-# Known Foundry install locations for rlmutil, checked in order
-RLMUTIL_CANDIDATES = [
-    "/opt/FoundryLicensingUtility/bin/rlmutil",
-    "/usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil",
-]
-
-# ── shared state ──────────────────────────────────────────────────────────────
-_metrics_lock  = threading.Lock()
-_metrics_text  = b""
-_rlmutil_cache = RLMUTIL_PATH  # resolved path after first successful auto-detect
+# ── shared state ───────────────────────────────────────────────────────────────
+_metrics_lock = threading.Lock()
+_metrics_text = b""
 
 
-# ── SSH helpers ───────────────────────────────────────────────────────────────
-
-def _ssh_base() -> list:
-    """Return the common SSH argument prefix."""
-    return [
-        "ssh",
-        "-i", RLM_SSH_KEY,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=10",
-        "-o", "BatchMode=yes",
-        f"{RLM_SSH_USER}@{RLM_HOST}",
-    ]
-
-
-def find_rlmutil() -> str:
-    """
-    Try both known rlmutil locations on the remote server.
-    Returns the first executable path found. Raises on failure.
-    Caches the result so SSH is only used once per restart.
-    """
-    global _rlmutil_cache
-    if _rlmutil_cache:
-        return _rlmutil_cache
-
-    log.info("Auto-detecting rlmutil on %s…", RLM_HOST)
-    for path in RLMUTIL_CANDIDATES:
-        try:
-            r = subprocess.run(
-                _ssh_base() + [f"test -x {path} && echo FOUND || echo NOTFOUND"],
-                capture_output=True, text=True, timeout=15,
-            )
-            if "FOUND" in r.stdout:
-                log.info("Found rlmutil at: %s", path)
-                _rlmutil_cache = path
-                return path
-        except Exception as e:
-            log.debug("Error checking %s: %s", path, e)
-
-    raise RuntimeError(
-        f"rlmutil not found in any known location on {RLM_HOST}. "
-        f"Checked: {RLMUTIL_CANDIDATES}"
-    )
-
+# ── rlmutil runner ─────────────────────────────────────────────────────────────
 
 def run_rlmutil() -> str:
-    """SSH to the license server and run rlmutil rlmstat -a."""
-    rlmutil = find_rlmutil()
-    cmd = _ssh_base() + [f"{rlmutil} rlmstat -a -c {RLM_PORT}@localhost"]
+    """Run rlmutil rlmstat -a pointing directly at the remote RLM server."""
+    cmd = [RLMUTIL_PATH, "rlmstat", "-a", "-c", f"{RLM_PORT}@{RLM_HOST}"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0 and not result.stdout:
         raise RuntimeError(f"rlmutil error: {result.stderr.strip()}")
     return result.stdout
 
 
-# ── parsers ───────────────────────────────────────────────────────────────────
+# ── parsers ────────────────────────────────────────────────────────────────────
 
 def parse_pool_status(text: str) -> list[dict]:
     """
@@ -114,8 +59,6 @@ def parse_pool_status(text: str) -> list[dict]:
         nuke_r v2026.1016
                 count: 4, # reservations: 0, inuse: 3, exp: 16-oct-2026
                 obsolete: 0, min_remove: 120, total checkouts: 23579
-
-    Returns list of dicts: product, version, total, used, exp, total_checkouts
     """
     results = []
     pool_section = re.search(
@@ -149,7 +92,6 @@ def parse_pool_status(text: str) -> list[dict]:
                 "exp":             cm.group(3),
                 "total_checkouts": int(cm.group(4)),
             })
-
     return results
 
 
@@ -158,9 +100,6 @@ def parse_usage(text: str) -> list[dict]:
     Parses the 'license usage status' block:
 
         nuke_i v2026.1016: asierra@spa438w 1/0 at 04/14 17:30  (handle: 1b40)
-
-    Groups by (product, version, user, host) counting active handles.
-    Returns list of dicts: product, version, user, host, handles
     """
     usage_section = re.search(r"license usage status.*", text, re.DOTALL | re.IGNORECASE)
     if not usage_section:
@@ -182,7 +121,7 @@ def parse_usage(text: str) -> list[dict]:
 
 
 def parse_isv_stats(text: str) -> dict:
-    """Extract denial and checkout counts from ISV section."""
+    """Extract denial and checkout counts from the ISV section."""
     stats = {"denials_today": 0, "checkouts_today": 0}
 
     today_block = re.search(
@@ -202,11 +141,11 @@ def parse_isv_stats(text: str) -> dict:
     return stats
 
 
-# ── metrics builder ───────────────────────────────────────────────────────────
+# ── metrics builder ────────────────────────────────────────────────────────────
 
 def scrape_rlm() -> str:
-    lines      = []
-    scrape_ok  = 1
+    lines     = []
+    scrape_ok = 1
 
     try:
         raw   = run_rlmutil()
@@ -216,7 +155,7 @@ def scrape_rlm() -> str:
 
         log.info("Products found: %s", sorted({p["product"] for p in pool}))
 
-        # ── per product+version metrics ────────────────────────────────────────
+        # ── per product + version ──────────────────────────────────────────────
         lines += ["# HELP rlm_license_total Total licenses per product/version",
                   "# TYPE rlm_license_total gauge"]
         for p in pool:
@@ -232,7 +171,7 @@ def scrape_rlm() -> str:
         for p in pool:
             lines.append(f'rlm_license_free{{product="{p["product"]}",version="{p["version"]}",exp="{p["exp"]}"}} {p["total"] - p["used"]}')
 
-        lines += ["# HELP rlm_license_usage_ratio Usage ratio (0.0-1.0) per product/version",
+        lines += ["# HELP rlm_license_usage_ratio Usage ratio (0.0-1.0)",
                   "# TYPE rlm_license_usage_ratio gauge"]
         for p in pool:
             ratio = round(p["used"] / p["total"], 4) if p["total"] > 0 else 0.0
@@ -243,7 +182,7 @@ def scrape_rlm() -> str:
         for p in pool:
             lines.append(f'rlm_license_checkouts_total{{product="{p["product"]}",version="{p["version"]}"}} {p["total_checkouts"]}')
 
-        # ── aggregated per product (excludes 'permanent' legacy entries) ──────
+        # ── aggregated per product (skip 'permanent' legacy entries) ──────────
         agg_total: dict = defaultdict(int)
         agg_used:  dict = defaultdict(int)
         for p in pool:
@@ -301,7 +240,7 @@ def scrape_rlm() -> str:
         log.error("Scrape error: %s", e)
         scrape_ok = 0
 
-    # ── health metrics ─────────────────────────────────────────────────────────
+    # ── health ─────────────────────────────────────────────────────────────────
     lines += [
         "# HELP rlm_exporter_up 1 if last scrape succeeded, 0 otherwise",
         "# TYPE rlm_exporter_up gauge",
@@ -314,7 +253,7 @@ def scrape_rlm() -> str:
     return "\n".join(lines) + "\n"
 
 
-# ── background scrape loop ────────────────────────────────────────────────────
+# ── background loop ────────────────────────────────────────────────────────────
 
 def background_scraper():
     global _metrics_text
@@ -329,7 +268,7 @@ def background_scraper():
         time.sleep(SCRAPE_INTERVAL)
 
 
-# ── HTTP server ───────────────────────────────────────────────────────────────
+# ── HTTP server ────────────────────────────────────────────────────────────────
 
 class MetricsHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -352,20 +291,20 @@ class MetricsHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, *args):
-        pass  # suppress per-request logs
+        pass
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── main ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     log.info("Nuke RLM Exporter starting…")
-    log.info("  RLM server : %s@%s (port %s)", RLM_SSH_USER, RLM_HOST, RLM_PORT)
-    log.info("  SSH key    : %s", RLM_SSH_KEY)
-    log.info("  rlmutil    : %s", RLMUTIL_PATH or f"auto-detect from {RLMUTIL_CANDIDATES}")
+    log.info("  RLM server : %s (port %s)", RLM_HOST, RLM_PORT)
+    log.info("  rlmutil    : %s", RLMUTIL_PATH)
+    log.info("  Command    : %s rlmstat -a -c %s@%s", RLMUTIL_PATH, RLM_PORT, RLM_HOST)
     log.info("  Metrics    : http://0.0.0.0:%d/metrics", EXPORTER_PORT)
     log.info("  Interval   : %ds", SCRAPE_INTERVAL)
 
-    # First scrape immediately on startup
+    # First scrape immediately
     try:
         text = scrape_rlm()
         with _metrics_lock:
@@ -374,11 +313,9 @@ if __name__ == "__main__":
     except Exception as e:
         log.warning("First scrape failed: %s", e)
 
-    # Start background loop
     t = threading.Thread(target=background_scraper, daemon=True)
     t.start()
 
-    # Serve metrics
     server = HTTPServer(("0.0.0.0", EXPORTER_PORT), MetricsHandler)
     log.info("Listening on http://0.0.0.0:%d", EXPORTER_PORT)
     try:
