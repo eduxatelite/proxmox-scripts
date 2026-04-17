@@ -237,7 +237,7 @@ step "Deploying Nuke License Dashboard"
 
 REPO_RAW="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/nuke"
 
-mkdir -p "${INSTALL_DIR}"/{config,prometheus,grafana/provisioning/{datasources,dashboards},grafana/dashboards}
+mkdir -p "${INSTALL_DIR}"/{config,prometheus,grafana/provisioning/datasources}
 
 # ── exporter config ───────────────────────────────────────────────────────────
 info "Writing configuration…"
@@ -262,7 +262,7 @@ scrape_configs:
       - targets: ['nuke-exporter:${PORT_EXPORTER}']
 EOF
 
-# ── grafana provisioning ──────────────────────────────────────────────────────
+# ── grafana datasource provisioning (only datasource — dashboard via API) ─────
 cat > "${INSTALL_DIR}/grafana/provisioning/datasources/prometheus.yml" <<EOF
 apiVersion: 1
 datasources:
@@ -274,25 +274,12 @@ datasources:
     isDefault: true
 EOF
 
-cat > "${INSTALL_DIR}/grafana/provisioning/dashboards/dashboards.yml" <<EOF
-apiVersion: 1
-providers:
-  - name: Nuke Licenses
-    orgId: 1
-    folder: Nuke
-    type: file
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    options:
-      path: /var/lib/grafana/dashboards
-EOF
-
 # ── download source files ─────────────────────────────────────────────────────
 info "Downloading source files…"
-curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"             || die "Failed to download nuke_exporter.py"
-curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"                   || die "Failed to download Dockerfile"
-curl -fsSL "${REPO_RAW}/rlmutil"                     -o "${INSTALL_DIR}/rlmutil"                      || die "Failed to download rlmutil binary"
-curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/grafana/dashboards/nuke.json" || die "Failed to download dashboard JSON"
+curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"  || die "Failed to download nuke_exporter.py"
+curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"        || die "Failed to download Dockerfile"
+curl -fsSL "${REPO_RAW}/rlmutil"                     -o "${INSTALL_DIR}/rlmutil"           || die "Failed to download rlmutil binary"
+curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/nuke_dashboard.json" || die "Failed to download dashboard JSON"
 chmod +x "${INSTALL_DIR}/rlmutil"
 ok "Source files downloaded"
 
@@ -341,10 +328,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS}
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SERVER_ROOT_URL=http://${SERVER_IP}:${PORT_GRAFANA}
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nuke.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - nuke_grafana_data:/var/lib/grafana
     networks:
       - nuke
@@ -380,35 +365,68 @@ ok "All containers started"
 
 sleep 4
 
-# ── Enable public dashboard via Grafana API ───────────────────────────────────
-step "Enabling public dashboard link"
-DASH_UID="nuke-rlm-v8"
+# ── Grafana API setup ─────────────────────────────────────────────────────────
+step "Configuring Grafana via API"
 PUBLIC_URL=""
+GURL="http://localhost:${PORT_GRAFANA}"
+GAUTH="admin:${GRAFANA_PASS}"
 
-# Wait up to 30s for Grafana to be ready
-for i in $(seq 1 15); do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -u "admin:${GRAFANA_PASS}" \
-    "http://localhost:${PORT_GRAFANA}/api/health" 2>/dev/null || true)
+# Wait up to 60s for Grafana to be ready
+info "Waiting for Grafana to start…"
+for i in $(seq 1 30); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$GAUTH" "${GURL}/api/health" 2>/dev/null || true)
   [[ "$STATUS" == "200" ]] && break
   sleep 2
 done
 
-PUBLIC_RESP=$(curl -s -X POST \
-  -H "Content-Type: application/json" \
-  -u "admin:${GRAFANA_PASS}" \
-  "http://localhost:${PORT_GRAFANA}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
-  -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
-  2>/dev/null || true)
-
-ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
-  "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" 2>/dev/null || true)
-
-if [[ -n "$ACCESS_TOKEN" ]]; then
-  PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
-  ok "Public dashboard link created"
+if [[ "$STATUS" != "200" ]]; then
+  warn "Grafana did not respond in time — skipping API setup"
 else
-  warn "Could not create public link automatically — use Share → Share externally in Grafana"
+  ok "Grafana ready"
+
+  # 1. Create Nuke folder
+  FOLDER_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' 2>/dev/null || true)
+
+  # 2. Import dashboard into the Nuke folder
+  info "Importing dashboard…"
+  DASH_JSON=$(cat "${INSTALL_DIR}/nuke_dashboard.json")
+  IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/dashboards/db" \
+    -d "{\"dashboard\":${DASH_JSON},\"folderUid\":\"nuke\",\"overwrite\":true}" \
+    2>/dev/null || true)
+
+  DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('uid','nuke-rlm-v8'))" 2>/dev/null || echo "nuke-rlm-v8")
+
+  if echo "$IMPORT_RESP" | grep -q '"status":"success"'; then
+    ok "Dashboard imported (uid: ${DASH_UID})"
+  else
+    warn "Dashboard import response: $(echo "$IMPORT_RESP" | head -c 200)"
+  fi
+
+  # 3. Set as home dashboard for the org
+  curl -s -X PUT -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/org/preferences" \
+    -d "{\"homeDashboardUID\":\"${DASH_UID}\"}" > /dev/null 2>&1 || true
+  ok "Home dashboard set"
+
+  # 4. Create public (externally shareable) link
+  info "Creating public dashboard link…"
+  PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
+    -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
+    2>/dev/null || true)
+
+  ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" 2>/dev/null || true)
+
+  if [[ -n "$ACCESS_TOKEN" ]]; then
+    PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
+    ok "Public link created"
+  else
+    warn "Could not create public link — use Share → Share externally in Grafana"
+  fi
 fi
 
 # =============================================================================
