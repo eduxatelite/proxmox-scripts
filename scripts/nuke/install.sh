@@ -223,8 +223,8 @@ wt_input RLM_HOST "RLM License Server" \
   "192.168.1.100"
 
 wt_input RLM_WEB_PORT "RLM License Server" \
-  "Enter the RLM web interface port:" \
-  "5054"
+  "Enter the RLM web interface port:\n(Foundry default is 4102. Check your browser URL when opening the RLM admin page.)" \
+  "4102"
 
 wt_input RLM_ISV "RLM License Server" \
   "Enter the ISV name (usually 'foundry' for Nuke):" \

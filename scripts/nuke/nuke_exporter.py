@@ -28,7 +28,7 @@ log = logging.getLogger("nuke_exporter")
 
 # ── config ─────────────────────────────────────────────────────────────────────
 RLM_HOST        = os.environ.get("RLM_HOST",        "localhost")
-RLM_WEB_PORT    = int(os.environ.get("RLM_WEB_PORT",    "5054"))
+RLM_WEB_PORT    = int(os.environ.get("RLM_WEB_PORT",    "4102"))
 RLM_ISV         = os.environ.get("RLM_ISV",         "foundry")
 EXPORTER_PORT   = int(os.environ.get("EXPORTER_PORT",   "9200"))
 SCRAPE_INTERVAL = int(os.environ.get("SCRAPE_INTERVAL", "60"))
