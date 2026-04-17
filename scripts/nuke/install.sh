@@ -392,77 +392,10 @@ if [[ "$STATUS" != "200" ]]; then
 else
   ok "Grafana ready"
 
-  # 1. Create Nuke folder (ignore error if it already exists)
-  curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
-
-  # 2. Build import payload for the Grafana 11 v2 scenes API
-  info "Importing dashboard…"
-  python3 - <<PYEOF
-import json
-with open("${INSTALL_DIR}/nuke_dashboard.json") as f:
-    dash = json.load(f)
-uid = dash.get("uid", "nuke-rlm-v8")
-payload = {
-    "apiVersion": "dashboard.grafana.app/v2alpha1",
-    "kind": "Dashboard",
-    "metadata": {
-        "name": uid,
-        "annotations": {
-            "grafana.app/folder": "nuke"
-        }
-    },
-    "spec": dash,
-}
-with open("/tmp/nuke_import_payload.json", "w") as out:
-    json.dump(payload, out)
-PYEOF
-
-  IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/apis/dashboard.grafana.app/v2alpha1/namespaces/default/dashboards" \
-    -d @/tmp/nuke_import_payload.json \
-    2>/dev/null || true)
-  sleep 2
-
-  # Log everything to file for debugging
-  {
-    echo "=== IMPORT RESPONSE ==="
-    echo "$IMPORT_RESP"
-    echo ""
-    echo "=== SEARCH RESPONSE ==="
-    curl -s -u "$GAUTH" "${GURL}/api/search?query=Nuke&type=dash-db" 2>/dev/null || true
-  } > /tmp/nuke-grafana-debug.log 2>&1
-
-  # 3. Find the dashboard by title (most reliable method)
-  SEARCH_RESP=$(curl -s -u "$GAUTH" \
-    "${GURL}/api/search?query=Nuke&type=dash-db" 2>/dev/null || true)
-
-  DASH_UID=$(echo "$SEARCH_RESP" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d[0]['uid'] if d else '')" \
-    2>/dev/null || true)
-
-  # Fallback: check import response (k8s API returns metadata.name)
-  if [[ -z "$DASH_UID" ]]; then
-    DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
-      "import json,sys; d=json.load(sys.stdin); print(d.get('metadata',{}).get('name', d.get('uid','')))" \
-      2>/dev/null || true)
-  fi
-
-  if [[ -n "$DASH_UID" ]]; then
-    ok "Dashboard in DB (uid: ${DASH_UID})"
-  else
-    warn "Dashboard not in DB — debug info saved to /tmp/nuke-grafana-debug.log"
-  fi
-
-  # 4. Set as home dashboard for the org
-  curl -s -X PUT -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/api/org/preferences" \
-    -d "{\"homeDashboardUID\":\"${DASH_UID}\"}" > /dev/null 2>&1 || true
-  ok "Home dashboard set"
-
-  # 5. Public access via anonymous viewer — no login needed
+  # Dashboard is served via file mount + GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+  # Anonymous viewer access is enabled — no DB import needed, home URL is the share link
   PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}"
-  ok "Anonymous viewer access enabled — dashboard is publicly accessible"
+  ok "Anonymous viewer access enabled — dashboard accessible without login"
 fi
 
 # =============================================================================
