@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  Nuke License Dashboard — Docker Installer
-#  Monitors Foundry / RLM license usage via Prometheus + Grafana.
+#  Monitors Foundry / RLM license usage via SSH + rlmutil → Prometheus + Grafana
 #  Works on any Linux distro with or without Docker pre-installed.
 #
 #  Usage:
@@ -23,7 +23,7 @@ step() { echo -e "\n${BLD}${CYN}══ $* ${RST}"; }
 die()  { err "$*"; exit 1; }
 
 # ── whiptail helpers ──────────────────────────────────────────────────────────
-WT_H=18; WT_W=68
+WT_H=20; WT_W=72
 
 wt_input() {
   local __var=$1 title=$2 prompt=$3 default=$4
@@ -61,7 +61,6 @@ is_rhel_based()   { [[ "$DISTRO" =~ ^(rhel|centos|rocky|almalinux|fedora|ol)$ ]]
 
 ensure_whiptail() {
   command -v whiptail &>/dev/null && return
-  info "Installing whiptail…"
   if   is_debian_based; then apt-get install -y whiptail &>/dev/null
   elif is_rhel_based;   then (dnf install -y newt || yum install -y newt) &>/dev/null
   fi
@@ -69,14 +68,12 @@ ensure_whiptail() {
 
 ensure_curl() {
   command -v curl &>/dev/null && return
-  info "Installing curl…"
   if   is_debian_based; then apt-get install -y curl &>/dev/null
   elif is_rhel_based;   then (dnf install -y curl || yum install -y curl) &>/dev/null
   fi
 }
 
 install_docker_rhel() {
-  info "Installing Docker on RHEL/Rocky/CentOS…"
   set +e
   if command -v dnf &>/dev/null; then
     dnf install -y yum-utils >> /tmp/docker-install.log 2>&1
@@ -91,7 +88,6 @@ install_docker_rhel() {
 }
 
 install_docker_debian() {
-  info "Installing Docker on Debian/Ubuntu…"
   set +e
   apt-get update -qq >> /tmp/docker-install.log 2>&1
   apt-get install -y ca-certificates curl gnupg lsb-release >> /tmp/docker-install.log 2>&1
@@ -130,11 +126,11 @@ wt_msg "Nuke License Dashboard" \
 This script will:
 
   1. Install Docker (if not already installed)
-  2. Deploy a Prometheus exporter for Foundry / RLM licenses
-  3. Deploy Grafana with the Nuke license dashboard pre-loaded
+  2. Generate an SSH key to connect to your RLM license server
+  3. Guide you through authorising that key on the server
+  4. Deploy Prometheus + Grafana with the Nuke dashboard pre-loaded
 
-Your RLM license server is NOT modified.
-This installer only reads license data (read-only).
+Your RLM license server is NOT modified — this is read-only.
 
 Press OK to continue."
 
@@ -149,40 +145,35 @@ if command -v docker &>/dev/null; then
 else
   wt_msg "Docker Not Found" \
 "Docker is not installed on this system.
-
-The installer will now install Docker automatically.
-This requires an internet connection.
+The installer will install it automatically.
 
 Distribution detected: ${DISTRO}
 
 Press OK to install Docker."
 
-  step "Installing Docker"
   echo "" > /tmp/docker-install.log
-
   if   is_debian_based; then install_docker_debian
   elif is_rhel_based;   then install_docker_rhel
-  else die "Unsupported distribution: ${DISTRO}. Please install Docker manually."; fi
+  else die "Unsupported distribution: ${DISTRO}. Install Docker manually."; fi
 
   if ! command -v docker &>/dev/null; then
-    err "Docker installation failed. Check /tmp/docker-install.log"
-    die "Run: cat /tmp/docker-install.log"
+    err "Docker installation failed."
+    die "Check /tmp/docker-install.log"
   fi
-
   systemctl enable docker >> /tmp/docker-install.log 2>&1 || true
   systemctl start docker  || die "Failed to start Docker."
-  ok "Docker installed successfully"
+  ok "Docker installed"
 fi
 
 if ! docker compose version &>/dev/null; then
-  die "Docker Compose plugin not found. Please install it: https://docs.docker.com/compose/install/"
+  die "Docker Compose plugin not found. See https://docs.docker.com/compose/install/"
 fi
 ok "Docker Compose available"
 
 # =============================================================================
 # STEP 2 — Studio + install directory
 # =============================================================================
-step "Studio Configuration"
+step "Configuration"
 
 wt_input STUDIO_NAME "Studio Name" \
   "Enter your studio name (shown in Grafana):" \
@@ -192,101 +183,175 @@ wt_input INSTALL_DIR "Install Directory" \
   "Where should the dashboard be installed?" \
   "/opt/nuke-licenses"
 
-# =============================================================================
-# STEP 3 — Grafana password
-# =============================================================================
-step "Grafana Credentials"
-
-wt_password GRAFANA_PASS "Grafana Admin Password" \
+wt_password GRAFANA_PASS "Grafana Password" \
   "Set a password for the Grafana admin user:"
-
 [[ -z "$GRAFANA_PASS" ]] && GRAFANA_PASS="nukedashboard"
 
 # =============================================================================
-# STEP 4 — RLM License Server
+# STEP 3 — RLM License Server
 # =============================================================================
 step "RLM License Server"
 
 wt_msg "RLM License Server" \
-"Now we need to connect to your Foundry / RLM license server.
+"Now we need the details of your Foundry RLM license server.
 
 You will need:
   • IP or hostname of the license server
-  • RLM web interface port (default: 5054)
-  • ISV name (almost always: foundry)
+  • SSH user (usually root)
+  • RLM license port — this is the port shown on the RLM web
+    admin page next to the 'rlm' entry (usually 4101 or 4102)
 
-The RLM web interface must be accessible from this machine.
-It is usually enabled by default on port 5054."
+The installer will generate an SSH key and guide you through
+authorising it on the license server.
+
+Press OK to continue."
 
 wt_input RLM_HOST "RLM License Server" \
   "Enter the IP or hostname of your RLM license server:" \
   "192.168.1.100"
 
-wt_input RLM_WEB_PORT "RLM License Server" \
-  "Enter the RLM web interface port:\n(Foundry default is 4102. Check your browser URL when opening the RLM admin page.)" \
-  "4102"
+wt_input RLM_SSH_USER "RLM License Server" \
+  "SSH user on the license server:" \
+  "root"
 
-wt_input RLM_ISV "RLM License Server" \
-  "Enter the ISV name (usually 'foundry' for Nuke):" \
-  "foundry"
+wt_input RLM_PORT "RLM License Server" \
+  "RLM license port (shown in the RLM web admin page next to 'rlm'):" \
+  "4101"
 
-# ── Test connection ────────────────────────────────────────────────────────────
-step "Testing RLM Connection"
-info "Connecting to http://${RLM_HOST}:${RLM_WEB_PORT}…"
+# =============================================================================
+# STEP 4 — SSH key setup
+# =============================================================================
+step "SSH Key Setup"
 
-HTTP_CODE=$(curl -s -o /tmp/rlm_test.html -w "%{http_code}" \
-  --max-time 10 \
-  "http://${RLM_HOST}:${RLM_WEB_PORT}/rlmstat?isv=${RLM_ISV}&stats=1" \
-  2>/dev/null || echo "000")
+KEY_DIR="${INSTALL_DIR}/config"
+KEY_PATH="${KEY_DIR}/id_nuke_rlm"
+mkdir -p "$KEY_DIR"
 
-case "$HTTP_CODE" in
-  200)
-    # Try to count products from response
-    PRODUCTS=$(grep -oE '[a-z_]+ v[0-9]+\.[0-9]+' /tmp/rlm_test.html 2>/dev/null | wc -l || echo "?")
-    ok "Connected to RLM server!"
-    wt_msg "Connection Successful" \
-"✔  Successfully connected to RLM web interface!
+if [[ -f "$KEY_PATH" ]]; then
+  info "SSH key already exists at ${KEY_PATH}"
+else
+  info "Generating SSH key…"
+  ssh-keygen -t ed25519 -f "$KEY_PATH" -N "" -C "nuke-license-exporter" \
+    || die "Failed to generate SSH key"
+  ok "SSH key generated"
+fi
 
-  Host    : ${RLM_HOST}:${RLM_WEB_PORT}
-  ISV     : ${RLM_ISV}
-  Products: ${PRODUCTS} detected
+chmod 600 "$KEY_PATH"
+PUB_KEY=$(cat "${KEY_PATH}.pub")
 
-Press OK to continue with the installation."
-    ;;
-  000)
-    warn "Cannot reach http://${RLM_HOST}:${RLM_WEB_PORT}"
-    wt_msg "Connection Failed" \
-"Could not reach the RLM web interface at:
-  http://${RLM_HOST}:${RLM_WEB_PORT}
+wt_msg "Authorise SSH Key" \
+"An SSH key has been generated. You must now copy it to
+the license server so the exporter can connect without a password.
 
-Please check:
-  • The IP address / hostname is correct
-  • Port ${RLM_WEB_PORT} is open in the firewall
-  • The RLM server is running
-  • The RLM web interface is enabled (it usually is by default)
+Run this command FROM ANOTHER TERMINAL on this machine:
 
-The installer will continue. You can update the connection
-settings later in:
+  ssh-copy-id -i ${KEY_PATH}.pub ${RLM_SSH_USER}@${RLM_HOST}
+
+Or manually add this line to ${RLM_SSH_USER}@${RLM_HOST}:~/.ssh/authorized_keys:
+
+  ${PUB_KEY}
+
+Press OK once you have authorised the key."
+
+# ── Test SSH connection ────────────────────────────────────────────────────────
+step "Testing SSH Connection"
+info "Connecting to ${RLM_SSH_USER}@${RLM_HOST}…"
+
+SSH_TEST=$(ssh \
+  -i "$KEY_PATH" \
+  -o StrictHostKeyChecking=no \
+  -o ConnectTimeout=10 \
+  -o BatchMode=yes \
+  "${RLM_SSH_USER}@${RLM_HOST}" \
+  "echo OK" 2>&1 || true)
+
+if [[ "$SSH_TEST" == "OK" ]]; then
+  ok "SSH connection successful"
+else
+  warn "SSH connection failed: ${SSH_TEST}"
+  wt_msg "SSH Connection Failed" \
+"Could not connect via SSH to:
+  ${RLM_SSH_USER}@${RLM_HOST}
+
+Error: ${SSH_TEST}
+
+Please make sure you have:
+  1. Added the public key to ~/.ssh/authorized_keys on the server
+  2. The server is reachable from this machine
+  3. The SSH user is correct
+
+The installer will continue. You can fix SSH access later —
+the exporter will retry automatically on each scrape.
+
+Check connection manually with:
+  ssh -i ${KEY_PATH} ${RLM_SSH_USER}@${RLM_HOST} 'echo OK'"
+fi
+
+# ── Auto-detect rlmutil ────────────────────────────────────────────────────────
+RLMUTIL_PATH=""
+if [[ "$SSH_TEST" == "OK" ]]; then
+  step "Detecting rlmutil"
+  info "Searching for rlmutil on the license server…"
+
+  for CANDIDATE in \
+    "/opt/FoundryLicensingUtility/bin/rlmutil" \
+    "/usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil"; do
+
+    FOUND=$(ssh \
+      -i "$KEY_PATH" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o BatchMode=yes \
+      "${RLM_SSH_USER}@${RLM_HOST}" \
+      "test -x ${CANDIDATE} && echo FOUND || echo NOTFOUND" 2>/dev/null || echo "NOTFOUND")
+
+    if [[ "$FOUND" == "FOUND" ]]; then
+      RLMUTIL_PATH="$CANDIDATE"
+      ok "rlmutil found at: ${RLMUTIL_PATH}"
+      break
+    fi
+  done
+
+  if [[ -z "$RLMUTIL_PATH" ]]; then
+    warn "rlmutil not found in known locations — will auto-detect at runtime"
+    wt_msg "rlmutil Not Found" \
+"Could not find rlmutil in the standard locations:
+
+  /opt/FoundryLicensingUtility/bin/rlmutil
+  /usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil
+
+The exporter will try to auto-detect it at runtime.
+If it still fails, set RLMUTIL_PATH in:
   ${INSTALL_DIR}/config/exporter.env"
-    ;;
-  *)
-    warn "Unexpected HTTP ${HTTP_CODE} from RLM server"
-    wt_msg "Unexpected Response" \
-"Received HTTP ${HTTP_CODE} from the RLM server.
+  fi
 
-Installation will continue. Check connection settings later in:
-  ${INSTALL_DIR}/config/exporter.env"
-    ;;
-esac
+  # Quick license test
+  if [[ -n "$RLMUTIL_PATH" ]]; then
+    info "Running test: ${RLMUTIL_PATH} rlmstat -a -c ${RLM_PORT}@localhost"
+    TEST_OUT=$(ssh \
+      -i "$KEY_PATH" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o BatchMode=yes \
+      "${RLM_SSH_USER}@${RLM_HOST}" \
+      "${RLMUTIL_PATH} rlmstat -a -c ${RLM_PORT}@localhost" 2>/dev/null | head -5 || true)
+
+    if echo "$TEST_OUT" | grep -qi "license\|rlm\|foundry"; then
+      ok "rlmutil responding — license data looks good"
+    else
+      warn "rlmutil ran but output looks unexpected — check manually"
+    fi
+  fi
+fi
 
 # =============================================================================
 # STEP 5 — Ports
 # =============================================================================
 step "Port Configuration"
 
-wt_input PORT_GRAFANA   "Ports" "Grafana port (web UI):"        "3001"
-wt_input PORT_PROM      "Ports" "Prometheus port:"              "9091"
-wt_input PORT_EXPORTER  "Ports" "License exporter port:"        "9200"
+wt_input PORT_GRAFANA   "Ports" "Grafana port (web UI):"     "3001"
+wt_input PORT_PROM      "Ports" "Prometheus port:"           "9091"
+wt_input PORT_EXPORTER  "Ports" "License exporter port:"     "9200"
 
 # =============================================================================
 # STEP 6 — Summary
@@ -294,13 +359,13 @@ wt_input PORT_EXPORTER  "Ports" "License exporter port:"        "9200"
 wt_msg "Ready to Install" \
 "Installation Summary
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Studio name    : ${STUDIO_NAME}
-  Install dir    : ${INSTALL_DIR}
-  RLM server     : ${RLM_HOST}:${RLM_WEB_PORT}
-  ISV            : ${RLM_ISV}
-  Grafana port   : ${PORT_GRAFANA}
-  Prometheus port: ${PORT_PROM}
-  Exporter port  : ${PORT_EXPORTER}
+  Studio          : ${STUDIO_NAME}
+  Install dir     : ${INSTALL_DIR}
+  RLM server      : ${RLM_SSH_USER}@${RLM_HOST} (port ${RLM_PORT})
+  rlmutil         : ${RLMUTIL_PATH:-auto-detect}
+  Grafana port    : ${PORT_GRAFANA}
+  Prometheus port : ${PORT_PROM}
+  Exporter port   : ${PORT_EXPORTER}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Press OK to start the installation."
@@ -312,15 +377,19 @@ step "Deploying Nuke License Dashboard"
 
 REPO_RAW="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/nuke"
 
-# Create directory structure
 mkdir -p "${INSTALL_DIR}"/{config,prometheus,grafana/provisioning/{datasources,dashboards},grafana/dashboards}
+
+# Copy SSH key to config dir (already there, just set perms)
+chmod 600 "${KEY_PATH}"
 
 # ── exporter config ───────────────────────────────────────────────────────────
 info "Writing configuration…"
 cat > "${INSTALL_DIR}/config/exporter.env" <<EOF
 RLM_HOST=${RLM_HOST}
-RLM_WEB_PORT=${RLM_WEB_PORT}
-RLM_ISV=${RLM_ISV}
+RLM_PORT=${RLM_PORT}
+RLM_SSH_USER=${RLM_SSH_USER}
+RLM_SSH_KEY=/config/id_nuke_rlm
+RLMUTIL_PATH=${RLMUTIL_PATH}
 EXPORTER_PORT=${PORT_EXPORTER}
 SCRAPE_INTERVAL=60
 EOF
@@ -338,7 +407,7 @@ scrape_configs:
       - targets: ['nuke-exporter:${PORT_EXPORTER}']
 EOF
 
-# ── grafana datasource ────────────────────────────────────────────────────────
+# ── grafana provisioning ──────────────────────────────────────────────────────
 cat > "${INSTALL_DIR}/grafana/provisioning/datasources/prometheus.yml" <<EOF
 apiVersion: 1
 datasources:
@@ -350,7 +419,6 @@ datasources:
     isDefault: true
 EOF
 
-# ── grafana dashboard provider ────────────────────────────────────────────────
 cat > "${INSTALL_DIR}/grafana/provisioning/dashboards/dashboards.yml" <<EOF
 apiVersion: 1
 providers:
@@ -366,9 +434,9 @@ EOF
 
 # ── download source files ─────────────────────────────────────────────────────
 info "Downloading source files…"
-curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"           || die "Failed to download nuke_exporter.py"
-curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"                 || die "Failed to download Dockerfile"
-curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/grafana/dashboards/nuke.json" || die "Failed to download dashboard JSON"
+curl -fsSL "${REPO_RAW}/nuke_exporter.py"            -o "${INSTALL_DIR}/nuke_exporter.py"              || die "Failed to download nuke_exporter.py"
+curl -fsSL "${REPO_RAW}/Dockerfile"                  -o "${INSTALL_DIR}/Dockerfile"                    || die "Failed to download Dockerfile"
+curl -fsSL "${REPO_RAW}/grafana_nuke_dashboard.json" -o "${INSTALL_DIR}/grafana/dashboards/nuke.json"  || die "Failed to download dashboard JSON"
 ok "Source files downloaded"
 
 # ── docker-compose.yml ────────────────────────────────────────────────────────
@@ -376,7 +444,7 @@ info "Writing docker-compose.yml…"
 cat > "${INSTALL_DIR}/docker-compose.yml" <<EOF
 services:
 
-  # ── Nuke License Exporter (reads RLM → exposes Prometheus metrics) ──────────
+  # ── Nuke License Exporter (SSH → rlmutil → Prometheus metrics) ─────────────
   nuke-exporter:
     build:
       context: .
@@ -384,12 +452,14 @@ services:
     container_name: nuke-exporter
     restart: unless-stopped
     env_file: config/exporter.env
+    volumes:
+      - ./config:/config:ro          # SSH key + exporter.env
     ports:
       - "${PORT_EXPORTER}:${PORT_EXPORTER}"
     networks:
       - nuke
 
-  # ── Prometheus (stores metrics history) ────────────────────────────────────
+  # ── Prometheus ──────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: nuke-prometheus
@@ -405,7 +475,7 @@ services:
     networks:
       - nuke
 
-  # ── Grafana (Nuke license dashboard) ───────────────────────────────────────
+  # ── Grafana ─────────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:latest
     container_name: nuke-grafana
@@ -439,7 +509,7 @@ cd "${INSTALL_DIR}"
 
 info "Building exporter image…"
 if ! docker compose build > /tmp/nuke-build.log 2>&1; then
-  err "Docker build failed. Last 20 lines of log:"
+  err "Docker build failed. Last 20 lines:"
   tail -20 /tmp/nuke-build.log
   die "Fix the error above, then re-run the installer."
 fi
@@ -447,7 +517,7 @@ ok "Image built"
 
 info "Starting all services…"
 if ! docker compose up -d > /tmp/nuke-up.log 2>&1; then
-  err "Failed to start containers. Last 20 lines of log:"
+  err "Failed to start containers. Last 20 lines:"
   tail -20 /tmp/nuke-up.log
   die "Fix the error above, then run: cd ${INSTALL_DIR} && docker compose up -d"
 fi
@@ -475,13 +545,14 @@ echo -e "  ${YLW}●${RST}  License Exporter   →  http://${SERVER_IP}:${PORT_E
 echo ""
 echo -e "  The Nuke license dashboard loads automatically when you log into Grafana."
 echo ""
+echo -e "  ${BLD}SSH key location:${RST}  ${KEY_PATH}"
+echo -e "  ${BLD}Config file:${RST}       ${INSTALL_DIR}/config/exporter.env"
+echo ""
 echo -e "  ${BLD}Useful commands:${RST}"
-echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f nuke-exporter${RST}   (live logs)"
-echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose restart${RST}                 (restart all)"
-echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose down${RST}                    (stop all)"
+echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f nuke-exporter${RST}"
+echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose restart${RST}"
+echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose down${RST}"
 echo ""
-echo -e "  ${BLD}Config file:${RST}  ${INSTALL_DIR}/config/exporter.env"
-echo ""
-echo -e "  ${YLW}If Grafana shows no data, make sure the RLM web interface${RST}"
-echo -e "  ${YLW}is reachable from this machine on port ${RLM_WEB_PORT}.${RST}"
+echo -e "  ${YLW}If the exporter shows errors, verify SSH access:${RST}"
+echo -e "  ${CYN}ssh -i ${KEY_PATH} ${RLM_SSH_USER}@${RLM_HOST} '${RLMUTIL_PATH:-rlmutil} rlmstat -a -c ${RLM_PORT}@localhost'${RST}"
 echo ""

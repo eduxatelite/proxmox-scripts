@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 """
-Nuke License Monitor — Prometheus Exporter
-Reads Foundry / RLM license server via its built-in HTTP web interface.
-No binary (rlmutil) required — just HTTP access to the RLM web port.
+Nuke License Dashboard — Prometheus Exporter
+Connects to the RLM license server via SSH and runs rlmutil rlmstat.
+Auto-detects rlmutil in the two known Foundry install locations.
 
-Environment variables (set via config/exporter.env):
-  RLM_HOST        - RLM server IP or hostname
-  RLM_WEB_PORT    - RLM web interface port (default: 5054)
-  RLM_ISV         - ISV name (default: foundry)
-  EXPORTER_PORT   - Port this exporter listens on (default: 9200)
-  SCRAPE_INTERVAL - Seconds between scrapes (default: 60)
+Environment variables (config/exporter.env):
+    RLM_HOST        - IP/hostname of the RLM server
+    RLM_PORT        - RLM license port (default: 4101)
+    RLM_SSH_USER    - SSH user on the license server (default: root)
+    RLM_SSH_KEY     - Path to SSH private key (default: /config/id_nuke_rlm)
+    RLMUTIL_PATH    - Override rlmutil path (auto-detected if empty)
+    EXPORTER_PORT   - Port this exporter listens on (default: 9200)
+    SCRAPE_INTERVAL - Seconds between scrapes (default: 60)
 """
 
 import os
 import re
 import time
 import logging
-import requests
-from prometheus_client import start_http_server, Gauge, Counter
+import threading
+import subprocess
+from collections import defaultdict
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,163 +31,357 @@ logging.basicConfig(
 log = logging.getLogger("nuke_exporter")
 
 # ── config ─────────────────────────────────────────────────────────────────────
-RLM_HOST        = os.environ.get("RLM_HOST",        "localhost")
-RLM_WEB_PORT    = int(os.environ.get("RLM_WEB_PORT",    "4102"))
-RLM_ISV         = os.environ.get("RLM_ISV",         "foundry")
-EXPORTER_PORT   = int(os.environ.get("EXPORTER_PORT",   "9200"))
-SCRAPE_INTERVAL = int(os.environ.get("SCRAPE_INTERVAL", "60"))
+RLM_HOST        = os.getenv("RLM_HOST",       "localhost")
+RLM_PORT        = os.getenv("RLM_PORT",       "4101")
+RLM_SSH_USER    = os.getenv("RLM_SSH_USER",   "root")
+RLM_SSH_KEY     = os.getenv("RLM_SSH_KEY",    "/config/id_nuke_rlm")
+RLMUTIL_PATH    = os.getenv("RLMUTIL_PATH",   "")           # empty = auto-detect
+EXPORTER_PORT   = int(os.getenv("EXPORTER_PORT",   "9200"))
+SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "60"))
 
-BASE_URL = f"http://{RLM_HOST}:{RLM_WEB_PORT}"
+# Known Foundry install locations for rlmutil, checked in order
+RLMUTIL_CANDIDATES = [
+    "/opt/FoundryLicensingUtility/bin/rlmutil",
+    "/usr/local/foundry/LicensingTools8.0/bin/RLM/rlmutil",
+]
 
-# ── prometheus metrics ─────────────────────────────────────────────────────────
-g_total    = Gauge("rlm_product_license_total",    "Total licenses per product",      ["product"])
-g_used     = Gauge("rlm_product_license_used",     "Licenses currently in use",       ["product"])
-g_handles  = Gauge("rlm_user_active_handles",      "Active handles per user/host",    ["product", "user", "host"])
-g_denials  = Gauge("rlm_isv_denials_today",        "License denials today",           ["isv"])
-g_up       = Gauge("rlm_exporter_up",              "1 if RLM server reachable, 0 otherwise")
-c_errors   = Counter("rlm_scrape_errors_total",    "Total scrape errors")
-g_duration = Gauge("rlm_scrape_duration_seconds",  "Time taken for last scrape")
-
-# ── track active handles to clear stale label sets ────────────────────────────
-_prev_handles: dict = {}
-
-
-def fetch_rlm_stat() -> str:
-    """Fetch raw text from RLM web interface."""
-    url = f"{BASE_URL}/rlmstat?isv={RLM_ISV}&stats=1"
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    # RLM can return HTML or plain text depending on version — strip tags
-    text = re.sub(r"<[^>]+>", " ", r.text)
-    return text
+# ── shared state ──────────────────────────────────────────────────────────────
+_metrics_lock  = threading.Lock()
+_metrics_text  = b""
+_rlmutil_cache = RLMUTIL_PATH  # resolved path after first successful auto-detect
 
 
-def fetch_denials() -> int:
-    """Try to get denial count from RLM ISV stats page."""
-    try:
-        url = f"{BASE_URL}/rlm_isv_stat?isv={RLM_ISV}"
-        r = requests.get(url, timeout=10)
-        text = re.sub(r"<[^>]+>", " ", r.text)
-        # Look for "N denials" in the page
-        m = re.search(r"(\d+)\s+denial", text, re.IGNORECASE)
-        return int(m.group(1)) if m else 0
-    except Exception:
-        return 0
+# ── SSH helpers ───────────────────────────────────────────────────────────────
+
+def _ssh_base() -> list:
+    """Return the common SSH argument prefix."""
+    return [
+        "ssh",
+        "-i", RLM_SSH_KEY,
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=10",
+        "-o", "BatchMode=yes",
+        f"{RLM_SSH_USER}@{RLM_HOST}",
+    ]
 
 
-def parse_rlm_stat(text: str):
+def find_rlmutil() -> str:
     """
-    Parse RLM rlmstat output.
-
-    Product line formats (vary by RLM version):
-      nuke_i v16.0: 10 licenses, 3 in use
-      nuke_i 16.0: 10 licenses, 3 in use
-      nuke_i v16.0: 10 licenses, 3 licenses in use
-
-    User line formats:
-      "alice" alice@machine1 16.0 Wed Apr 17 09:15 2024 1 handles
-      "alice" alice@machine1 16.0 17-apr-2024 09:15 1 handles
+    Try both known rlmutil locations on the remote server.
+    Returns the first executable path found. Raises on failure.
+    Caches the result so SSH is only used once per restart.
     """
-    global _prev_handles
+    global _rlmutil_cache
+    if _rlmutil_cache:
+        return _rlmutil_cache
 
-    products: dict = {}   # product → (total, used)
-    handles:  dict = {}   # (product, user, host) → count
-
-    current_product = None
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-
-        # ── product line ───────────────────────────────────────────────────────
-        m = re.match(
-            r"^([\w]+)\s+v?[\d.]+[^:]*:\s+(\d+)\s+licens\w+,\s+(\d+)\s+(?:licens\w+\s+)?in use",
-            line, re.IGNORECASE,
-        )
-        if m:
-            current_product = m.group(1).lower()
-            products[current_product] = (int(m.group(2)), int(m.group(3)))
-            continue
-
-        # ── user / handle line ─────────────────────────────────────────────────
-        if current_product:
-            # Pattern: "username" user@host version date(s) N handles
-            m = re.match(
-                r'^"([^"]+)"\s+(\S+)@(\S+)\s+[\d.]+\s+.+?\s+(\d+)\s+handles?',
-                line,
+    log.info("Auto-detecting rlmutil on %s…", RLM_HOST)
+    for path in RLMUTIL_CANDIDATES:
+        try:
+            r = subprocess.run(
+                _ssh_base() + [f"test -x {path} && echo FOUND || echo NOTFOUND"],
+                capture_output=True, text=True, timeout=15,
             )
-            if m:
-                user  = m.group(1)
-                host  = m.group(3)
-                count = int(m.group(4))
-                key   = (current_product, user, host)
-                handles[key] = handles.get(key, 0) + count
+            if "FOUND" in r.stdout:
+                log.info("Found rlmutil at: %s", path)
+                _rlmutil_cache = path
+                return path
+        except Exception as e:
+            log.debug("Error checking %s: %s", path, e)
 
-    return products, handles
+    raise RuntimeError(
+        f"rlmutil not found in any known location on {RLM_HOST}. "
+        f"Checked: {RLMUTIL_CANDIDATES}"
+    )
 
 
-def collect():
-    start = time.time()
-    global _prev_handles
+def run_rlmutil() -> str:
+    """SSH to the license server and run rlmutil rlmstat -a."""
+    rlmutil = find_rlmutil()
+    cmd = _ssh_base() + [f"{rlmutil} rlmstat -a -c {RLM_PORT}@localhost"]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0 and not result.stdout:
+        raise RuntimeError(f"rlmutil error: {result.stderr.strip()}")
+    return result.stdout
+
+
+# ── parsers ───────────────────────────────────────────────────────────────────
+
+def parse_pool_status(text: str) -> list[dict]:
+    """
+    Parses the 'license pool status' block:
+
+        nuke_r v2026.1016
+                count: 4, # reservations: 0, inuse: 3, exp: 16-oct-2026
+                obsolete: 0, min_remove: 120, total checkouts: 23579
+
+    Returns list of dicts: product, version, total, used, exp, total_checkouts
+    """
+    results = []
+    pool_section = re.search(
+        r"license pool status.*?(?=license usage status|\Z)",
+        text, re.DOTALL | re.IGNORECASE,
+    )
+    if not pool_section:
+        log.warning("Block 'license pool status' not found in rlmutil output")
+        return results
+
+    block = pool_section.group(0)
+    prod_pattern  = re.compile(r"^\s{0,12}(\w+)\s+v([\d\.]+)\s*$", re.MULTILINE)
+    count_pattern = re.compile(
+        r"count:\s*(\d+).*?inuse:\s*(\d+).*?exp:\s*([\w\-]+).*?total checkouts:\s*(\d+)",
+        re.DOTALL,
+    )
+
+    for m in prod_pattern.finditer(block):
+        product = m.group(1).lower()
+        version = m.group(2)
+        rest  = block[m.end():]
+        nxt   = prod_pattern.search(rest)
+        chunk = rest[:nxt.start()] if nxt else rest[:500]
+        cm = count_pattern.search(chunk)
+        if cm:
+            results.append({
+                "product":         product,
+                "version":         version,
+                "total":           int(cm.group(1)),
+                "used":            int(cm.group(2)),
+                "exp":             cm.group(3),
+                "total_checkouts": int(cm.group(4)),
+            })
+
+    return results
+
+
+def parse_usage(text: str) -> list[dict]:
+    """
+    Parses the 'license usage status' block:
+
+        nuke_i v2026.1016: asierra@spa438w 1/0 at 04/14 17:30  (handle: 1b40)
+
+    Groups by (product, version, user, host) counting active handles.
+    Returns list of dicts: product, version, user, host, handles
+    """
+    usage_section = re.search(r"license usage status.*", text, re.DOTALL | re.IGNORECASE)
+    if not usage_section:
+        return []
+
+    block = usage_section.group(0)
+    line_pattern = re.compile(
+        r"(\w+)\s+v([\d\.]+):\s+(\w+)@([\w\-\.]+)\s+\d+/\d+\s+at"
+    )
+    counter: dict = defaultdict(int)
+    for m in line_pattern.finditer(block):
+        key = (m.group(1).lower(), m.group(2), m.group(3).lower(), m.group(4).lower())
+        counter[key] += 1
+
+    return [
+        {"product": k[0], "version": k[1], "user": k[2], "host": k[3], "handles": v}
+        for k, v in counter.items()
+    ]
+
+
+def parse_isv_stats(text: str) -> dict:
+    """Extract denial and checkout counts from ISV section."""
+    stats = {"denials_today": 0, "checkouts_today": 0}
+
+    today_block = re.search(
+        r"foundry ISV server.*?Todays Statistics.*?Denials:\s+\d+[^\d]*(\d+)",
+        text, re.DOTALL | re.IGNORECASE,
+    )
+    if today_block:
+        stats["denials_today"] = int(today_block.group(1))
+
+    checkouts_today = re.search(
+        r"foundry ISV server.*?Todays Statistics.*?Checkouts:\s+\d+[^\d]*(\d+)",
+        text, re.DOTALL | re.IGNORECASE,
+    )
+    if checkouts_today:
+        stats["checkouts_today"] = int(checkouts_today.group(1))
+
+    return stats
+
+
+# ── metrics builder ───────────────────────────────────────────────────────────
+
+def scrape_rlm() -> str:
+    lines      = []
+    scrape_ok  = 1
 
     try:
-        text = fetch_rlm_stat()
-        products, handles = parse_rlm_stat(text)
-        denials = fetch_denials()
+        raw   = run_rlmutil()
+        pool  = parse_pool_status(raw)
+        usage = parse_usage(raw)
+        isv   = parse_isv_stats(raw)
 
-        # ── product metrics ────────────────────────────────────────────────────
-        for product, (total, used) in products.items():
-            g_total.labels(product=product).set(total)
-            g_used.labels(product=product).set(used)
+        log.info("Products found: %s", sorted({p["product"] for p in pool}))
 
-        # ── user handle metrics — clear stale entries ──────────────────────────
-        for key in _prev_handles:
-            if key not in handles:
-                g_handles.labels(product=key[0], user=key[1], host=key[2]).set(0)
-        for (product, user, host), count in handles.items():
-            g_handles.labels(product=product, user=user, host=host).set(count)
-        _prev_handles = dict(handles)
+        # ── per product+version metrics ────────────────────────────────────────
+        lines += ["# HELP rlm_license_total Total licenses per product/version",
+                  "# TYPE rlm_license_total gauge"]
+        for p in pool:
+            lines.append(f'rlm_license_total{{product="{p["product"]}",version="{p["version"]}",exp="{p["exp"]}"}} {p["total"]}')
 
-        # ── denials & health ───────────────────────────────────────────────────
-        g_denials.labels(isv=RLM_ISV).set(denials)
-        g_up.set(1)
+        lines += ["# HELP rlm_license_used Licenses in use per product/version",
+                  "# TYPE rlm_license_used gauge"]
+        for p in pool:
+            lines.append(f'rlm_license_used{{product="{p["product"]}",version="{p["version"]}",exp="{p["exp"]}"}} {p["used"]}')
 
-        elapsed = time.time() - start
-        g_duration.set(elapsed)
+        lines += ["# HELP rlm_license_free Free licenses per product/version",
+                  "# TYPE rlm_license_free gauge"]
+        for p in pool:
+            lines.append(f'rlm_license_free{{product="{p["product"]}",version="{p["version"]}",exp="{p["exp"]}"}} {p["total"] - p["used"]}')
 
-        total_used = sum(u for _, u in products.values())
-        log.info(
-            "Scraped OK — %d products, %d total in use, %d denials today | %.2fs",
-            len(products), total_used, denials, elapsed,
-        )
+        lines += ["# HELP rlm_license_usage_ratio Usage ratio (0.0-1.0) per product/version",
+                  "# TYPE rlm_license_usage_ratio gauge"]
+        for p in pool:
+            ratio = round(p["used"] / p["total"], 4) if p["total"] > 0 else 0.0
+            lines.append(f'rlm_license_usage_ratio{{product="{p["product"]}",version="{p["version"]}",exp="{p["exp"]}"}} {ratio}')
 
-    except requests.exceptions.ConnectionError:
-        log.warning("Cannot connect to RLM server at %s", BASE_URL)
-        g_up.set(0)
-        c_errors.inc()
-        g_duration.set(time.time() - start)
+        lines += ["# HELP rlm_license_checkouts_total Historical total checkouts",
+                  "# TYPE rlm_license_checkouts_total counter"]
+        for p in pool:
+            lines.append(f'rlm_license_checkouts_total{{product="{p["product"]}",version="{p["version"]}"}} {p["total_checkouts"]}')
+
+        # ── aggregated per product (excludes 'permanent' legacy entries) ──────
+        agg_total: dict = defaultdict(int)
+        agg_used:  dict = defaultdict(int)
+        for p in pool:
+            if p["exp"].lower() == "permanent":
+                continue
+            agg_total[p["product"]] += p["total"]
+            agg_used[p["product"]]  += p["used"]
+
+        lines += ["# HELP rlm_product_license_total Aggregated total licenses per product",
+                  "# TYPE rlm_product_license_total gauge"]
+        for prod, total in agg_total.items():
+            lines.append(f'rlm_product_license_total{{product="{prod}"}} {total}')
+
+        lines += ["# HELP rlm_product_license_used Aggregated licenses in use per product",
+                  "# TYPE rlm_product_license_used gauge"]
+        for prod, used in agg_used.items():
+            lines.append(f'rlm_product_license_used{{product="{prod}"}} {used}')
+
+        lines += ["# HELP rlm_product_license_usage_ratio Aggregated usage ratio per product",
+                  "# TYPE rlm_product_license_usage_ratio gauge"]
+        for prod in agg_total:
+            ratio = round(agg_used[prod] / agg_total[prod], 4) if agg_total[prod] > 0 else 0.0
+            lines.append(f'rlm_product_license_usage_ratio{{product="{prod}"}} {ratio}')
+
+        # ── active user handles ────────────────────────────────────────────────
+        if usage:
+            lines += ["# HELP rlm_user_active_handles Active handles per user/host/product",
+                      "# TYPE rlm_user_active_handles gauge"]
+            for u in usage:
+                lines.append(
+                    f'rlm_user_active_handles{{user="{u["user"]}",host="{u["host"]}",'
+                    f'product="{u["product"]}",version="{u["version"]}"}} {u["handles"]}'
+                )
+
+        # ── unique active users per product ────────────────────────────────────
+        users_per_product: dict = defaultdict(set)
+        for u in usage:
+            users_per_product[u["product"]].add(u["user"])
+
+        lines += ["# HELP rlm_product_active_users Unique users with an active license",
+                  "# TYPE rlm_product_active_users gauge"]
+        for prod, users in users_per_product.items():
+            lines.append(f'rlm_product_active_users{{product="{prod}"}} {len(users)}')
+
+        # ── ISV stats ──────────────────────────────────────────────────────────
+        lines += ["# HELP rlm_isv_denials_today License denials today",
+                  "# TYPE rlm_isv_denials_today gauge",
+                  f'rlm_isv_denials_today{{isv="foundry"}} {isv["denials_today"]}']
+
+        lines += ["# HELP rlm_isv_checkouts_today License checkouts today",
+                  "# TYPE rlm_isv_checkouts_today gauge",
+                  f'rlm_isv_checkouts_today{{isv="foundry"}} {isv["checkouts_today"]}']
+
     except Exception as e:
         log.error("Scrape error: %s", e)
-        g_up.set(0)
-        c_errors.inc()
-        g_duration.set(time.time() - start)
+        scrape_ok = 0
+
+    # ── health metrics ─────────────────────────────────────────────────────────
+    lines += [
+        "# HELP rlm_exporter_up 1 if last scrape succeeded, 0 otherwise",
+        "# TYPE rlm_exporter_up gauge",
+        f"rlm_exporter_up {scrape_ok}",
+        "# HELP rlm_exporter_scrape_timestamp_seconds Unix timestamp of last scrape",
+        "# TYPE rlm_exporter_scrape_timestamp_seconds gauge",
+        f"rlm_exporter_scrape_timestamp_seconds {time.time():.0f}",
+    ]
+
+    return "\n".join(lines) + "\n"
 
 
-# ── main ───────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    log.info("Nuke License Exporter starting…")
-    log.info("RLM web interface: %s  ISV: %s", BASE_URL, RLM_ISV)
-    log.info("Exporter port: %d  Scrape interval: %ds", EXPORTER_PORT, SCRAPE_INTERVAL)
+# ── background scrape loop ────────────────────────────────────────────────────
 
-    start_http_server(EXPORTER_PORT)
-    log.info("Metrics at http://0.0.0.0:%d/metrics", EXPORTER_PORT)
-
+def background_scraper():
+    global _metrics_text
     while True:
         try:
-            collect()
+            text = scrape_rlm()
+            with _metrics_lock:
+                _metrics_text = text.encode("utf-8")
+            log.info("Scrape OK — %d bytes", len(_metrics_text))
         except Exception as e:
-            log.error("Unexpected error: %s", e)
-            c_errors.inc()
-            g_up.set(0)
+            log.exception("Unexpected error in scraper: %s", e)
         time.sleep(SCRAPE_INTERVAL)
+
+
+# ── HTTP server ───────────────────────────────────────────────────────────────
+
+class MetricsHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ("/metrics", "/metrics/"):
+            with _metrics_lock:
+                body = _metrics_text
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/":
+            body = b"<html><body><h3>Nuke RLM Exporter</h3><a href='/metrics'>/metrics</a></body></html>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, *args):
+        pass  # suppress per-request logs
+
+
+# ── main ──────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    log.info("Nuke RLM Exporter starting…")
+    log.info("  RLM server : %s@%s (port %s)", RLM_SSH_USER, RLM_HOST, RLM_PORT)
+    log.info("  SSH key    : %s", RLM_SSH_KEY)
+    log.info("  rlmutil    : %s", RLMUTIL_PATH or f"auto-detect from {RLMUTIL_CANDIDATES}")
+    log.info("  Metrics    : http://0.0.0.0:%d/metrics", EXPORTER_PORT)
+    log.info("  Interval   : %ds", SCRAPE_INTERVAL)
+
+    # First scrape immediately on startup
+    try:
+        text = scrape_rlm()
+        with _metrics_lock:
+            _metrics_text = text.encode("utf-8")
+        log.info("First scrape OK")
+    except Exception as e:
+        log.warning("First scrape failed: %s", e)
+
+    # Start background loop
+    t = threading.Thread(target=background_scraper, daemon=True)
+    t.start()
+
+    # Serve metrics
+    server = HTTPServer(("0.0.0.0", EXPORTER_PORT), MetricsHandler)
+    log.info("Listening on http://0.0.0.0:%d", EXPORTER_PORT)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        log.info("Exporter stopped.")
