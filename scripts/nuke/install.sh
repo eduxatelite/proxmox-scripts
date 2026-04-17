@@ -392,10 +392,53 @@ if [[ "$STATUS" != "200" ]]; then
 else
   ok "Grafana ready"
 
-  # Dashboard is served via file mount + GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
-  # Anonymous viewer access is enabled — no DB import needed, home URL is the share link
-  PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}"
-  ok "Anonymous viewer access enabled — dashboard accessible without login"
+  # 1. Create Nuke folder
+  curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
+
+  # 2. Import dashboard (classic format — compatible with all Grafana renderers)
+  info "Importing dashboard…"
+  python3 - <<PYEOF
+import json
+with open("${INSTALL_DIR}/nuke_dashboard.json") as f:
+    dash = json.load(f)
+payload = {"dashboard": dash, "folderUid": "nuke", "overwrite": True}
+with open("/tmp/nuke_import_payload.json", "w") as out:
+    json.dump(payload, out)
+PYEOF
+
+  IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/dashboards/db" \
+    -d @/tmp/nuke_import_payload.json \
+    2>/dev/null || true)
+
+  DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('uid','nuke-rlm-v8'))" \
+    2>/dev/null || echo "nuke-rlm-v8")
+
+  echo "Import: $(echo "$IMPORT_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null)" \
+    >> /tmp/nuke-grafana-debug.log
+
+  ok "Dashboard imported (uid: ${DASH_UID})"
+
+  # 3. Create public shareable link
+  info "Creating public dashboard link…"
+  PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
+    -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
+    2>/dev/null || true)
+
+  ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" \
+    2>/dev/null || true)
+
+  if [[ -n "$ACCESS_TOKEN" ]]; then
+    PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
+    ok "Public link created"
+  else
+    PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}"
+    warn "Public link not created — anonymous access enabled as fallback"
+  fi
 fi
 
 # =============================================================================
