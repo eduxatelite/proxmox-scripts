@@ -388,12 +388,20 @@ else
   curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
 
-  # 2. Import dashboard — try with folderUid first
+  # 2. Build import payload via python3 (avoids shell escaping issues with large JSON)
   info "Importing dashboard…"
-  DASH_JSON=$(cat "${INSTALL_DIR}/nuke_dashboard.json")
+  python3 - <<PYEOF
+import json, sys
+with open("${INSTALL_DIR}/nuke_dashboard.json") as f:
+    dash = json.load(f)
+payload = {"dashboard": dash, "folderUid": "nuke", "overwrite": True}
+with open("/tmp/nuke_import_payload.json", "w") as out:
+    json.dump(payload, out)
+PYEOF
+
   IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/dashboards/db" \
-    -d "{\"dashboard\":${DASH_JSON},\"folderUid\":\"nuke\",\"overwrite\":true}" \
+    -d @/tmp/nuke_import_payload.json \
     2>/dev/null || true)
   sleep 2
 
@@ -412,31 +420,16 @@ else
       2>/dev/null || true)
   fi
 
-  # Final fallback: use the uid we set in the JSON
   [[ -z "$DASH_UID" ]] && DASH_UID="nuke-rlm-v8"
+  ok "Dashboard imported (uid: ${DASH_UID})"
 
-  ok "Dashboard ready (uid: ${DASH_UID})"
-
-  # 4. Move dashboard into Nuke folder if it isn't already there
-  DASH_INFO=$(curl -s -u "$GAUTH" "${GURL}/api/dashboards/uid/${DASH_UID}" 2>/dev/null || true)
-  CURRENT_FOLDER=$(echo "$DASH_INFO" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d.get('meta',{}).get('folderUid',''))" \
-    2>/dev/null || true)
-
-  if [[ "$CURRENT_FOLDER" != "nuke" ]]; then
-    curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-      "${GURL}/api/dashboards/db" \
-      -d "{\"dashboard\":${DASH_JSON},\"folderUid\":\"nuke\",\"overwrite\":true}" \
-      > /dev/null 2>&1 || true
-  fi
-
-  # 5. Set as home dashboard for the org
+  # 4. Set as home dashboard for the org
   curl -s -X PUT -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/org/preferences" \
     -d "{\"homeDashboardUID\":\"${DASH_UID}\"}" > /dev/null 2>&1 || true
   ok "Home dashboard set"
 
-  # 6. Create public (externally shareable) link
+  # 5. Create public (externally shareable) link
   info "Creating public dashboard link…"
   PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
