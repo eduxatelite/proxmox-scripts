@@ -329,7 +329,9 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SERVER_ROOT_URL=http://${SERVER_IP}:${PORT_GRAFANA}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nuke.json
-      - GF_FEATURE_TOGGLES_ENABLE=dashboardScene publicDashboardsScene
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_HIDE_VERSION=true
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./nuke_dashboard.json:/var/lib/grafana/dashboards/nuke.json:ro
@@ -458,23 +460,9 @@ PYEOF
     -d "{\"homeDashboardUID\":\"${DASH_UID}\"}" > /dev/null 2>&1 || true
   ok "Home dashboard set"
 
-  # 5. Create public (externally shareable) link
-  info "Creating public dashboard link…"
-  PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
-    -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
-    2>/dev/null || true)
-
-  ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" \
-    2>/dev/null || true)
-
-  if [[ -n "$ACCESS_TOKEN" ]]; then
-    PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
-    ok "Public link created"
-  else
-    warn "Could not auto-create public link — in Grafana: Share → Share externally"
-  fi
+  # 5. Public access via anonymous viewer — no login needed
+  PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}"
+  ok "Anonymous viewer access enabled — dashboard is publicly accessible"
 fi
 
 # =============================================================================
