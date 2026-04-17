@@ -328,8 +328,10 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS}
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SERVER_ROOT_URL=http://${SERVER_IP}:${PORT_GRAFANA}
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/nuke.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./nuke_dashboard.json:/var/lib/grafana/dashboards/nuke.json:ro
       - nuke_grafana_data:/var/lib/grafana
     networks:
       - nuke
@@ -405,23 +407,33 @@ PYEOF
     2>/dev/null || true)
   sleep 2
 
-  # 3. Find the dashboard by title (more reliable than trusting import response UID)
+  # Show import result for debugging
+  IMPORT_STATUS=$(echo "$IMPORT_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('status', d.get('message', str(d)[:120])))" \
+    2>/dev/null || echo "unknown")
+  info "Import API response: ${IMPORT_STATUS}"
+
+  # 3. Find the dashboard by title (most reliable method)
   SEARCH_RESP=$(curl -s -u "$GAUTH" \
-    "${GURL}/api/search?query=Nuke+RLM+Licenses&type=dash-db" 2>/dev/null || true)
+    "${GURL}/api/search?query=Nuke&type=dash-db" 2>/dev/null || true)
 
   DASH_UID=$(echo "$SEARCH_RESP" | python3 -c \
     "import json,sys; d=json.load(sys.stdin); print(d[0]['uid'] if d else '')" \
     2>/dev/null || true)
 
-  # Fallback: check import response
+  # Fallback: check import response uid field
   if [[ -z "$DASH_UID" ]]; then
     DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
       "import json,sys; d=json.load(sys.stdin); print(d.get('uid',''))" \
       2>/dev/null || true)
   fi
 
-  [[ -z "$DASH_UID" ]] && DASH_UID="nuke-rlm-v8"
-  ok "Dashboard imported (uid: ${DASH_UID})"
+  if [[ -n "$DASH_UID" ]]; then
+    ok "Dashboard in DB (uid: ${DASH_UID})"
+  else
+    warn "Dashboard not found in DB — home works via file mount, but public link unavailable"
+    warn "Check /tmp/nuke_import_payload.json and try: curl -s -u admin:PASS ${GURL}/api/dashboards/db -X POST -H 'Content-Type: application/json' -d @/tmp/nuke_import_payload.json"
+  fi
 
   # 4. Set as home dashboard for the org
   curl -s -X PUT -H "Content-Type: application/json" -u "$GAUTH" \
