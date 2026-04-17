@@ -373,16 +373,19 @@ PUBLIC_URL=""
 GURL="http://localhost:${PORT_GRAFANA}"
 GAUTH="admin:${GRAFANA_PASS}"
 
-# Wait up to 60s for Grafana to be ready
+# Wait up to 3 minutes for Grafana to be ready
 info "Waiting for Grafana to start…"
-for i in $(seq 1 30); do
+STATUS="000"
+for i in $(seq 1 90); do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$GAUTH" "${GURL}/api/health" 2>/dev/null || true)
   [[ "$STATUS" == "200" ]] && break
   sleep 2
 done
+echo "Health check final status: ${STATUS}" > /tmp/nuke-grafana-debug.log
 
 if [[ "$STATUS" != "200" ]]; then
-  warn "Grafana did not respond in time — skipping API setup"
+  warn "Grafana did not respond after 3 minutes (status: ${STATUS})"
+  warn "Check: curl -u admin:${GRAFANA_PASS} ${GURL}/api/health"
 else
   ok "Grafana ready"
 
