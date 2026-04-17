@@ -384,34 +384,59 @@ if [[ "$STATUS" != "200" ]]; then
 else
   ok "Grafana ready"
 
-  # 1. Create Nuke folder
-  FOLDER_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' 2>/dev/null || true)
+  # 1. Create Nuke folder (ignore error if it already exists)
+  curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+    "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
 
-  # 2. Import dashboard into the Nuke folder
+  # 2. Import dashboard — try with folderUid first
   info "Importing dashboard…"
   DASH_JSON=$(cat "${INSTALL_DIR}/nuke_dashboard.json")
   IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/dashboards/db" \
     -d "{\"dashboard\":${DASH_JSON},\"folderUid\":\"nuke\",\"overwrite\":true}" \
     2>/dev/null || true)
+  sleep 2
 
-  DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d.get('uid','nuke-rlm-v8'))" 2>/dev/null || echo "nuke-rlm-v8")
+  # 3. Find the dashboard by title (more reliable than trusting import response UID)
+  SEARCH_RESP=$(curl -s -u "$GAUTH" \
+    "${GURL}/api/search?query=Nuke+RLM+Licenses&type=dash-db" 2>/dev/null || true)
 
-  if echo "$IMPORT_RESP" | grep -q '"status":"success"'; then
-    ok "Dashboard imported (uid: ${DASH_UID})"
-  else
-    warn "Dashboard import response: $(echo "$IMPORT_RESP" | head -c 200)"
+  DASH_UID=$(echo "$SEARCH_RESP" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d[0]['uid'] if d else '')" \
+    2>/dev/null || true)
+
+  # Fallback: check import response
+  if [[ -z "$DASH_UID" ]]; then
+    DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
+      "import json,sys; d=json.load(sys.stdin); print(d.get('uid',''))" \
+      2>/dev/null || true)
   fi
 
-  # 3. Set as home dashboard for the org
+  # Final fallback: use the uid we set in the JSON
+  [[ -z "$DASH_UID" ]] && DASH_UID="nuke-rlm-v8"
+
+  ok "Dashboard ready (uid: ${DASH_UID})"
+
+  # 4. Move dashboard into Nuke folder if it isn't already there
+  DASH_INFO=$(curl -s -u "$GAUTH" "${GURL}/api/dashboards/uid/${DASH_UID}" 2>/dev/null || true)
+  CURRENT_FOLDER=$(echo "$DASH_INFO" | python3 -c \
+    "import json,sys; d=json.load(sys.stdin); print(d.get('meta',{}).get('folderUid',''))" \
+    2>/dev/null || true)
+
+  if [[ "$CURRENT_FOLDER" != "nuke" ]]; then
+    curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+      "${GURL}/api/dashboards/db" \
+      -d "{\"dashboard\":${DASH_JSON},\"folderUid\":\"nuke\",\"overwrite\":true}" \
+      > /dev/null 2>&1 || true
+  fi
+
+  # 5. Set as home dashboard for the org
   curl -s -X PUT -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/org/preferences" \
     -d "{\"homeDashboardUID\":\"${DASH_UID}\"}" > /dev/null 2>&1 || true
   ok "Home dashboard set"
 
-  # 4. Create public (externally shareable) link
+  # 6. Create public (externally shareable) link
   info "Creating public dashboard link…"
   PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/dashboards/uid/${DASH_UID}/public-dashboards" \
@@ -419,13 +444,14 @@ else
     2>/dev/null || true)
 
   ACCESS_TOKEN=$(echo "$PUBLIC_RESP" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" 2>/dev/null || true)
+    "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" \
+    2>/dev/null || true)
 
   if [[ -n "$ACCESS_TOKEN" ]]; then
     PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${ACCESS_TOKEN}"
     ok "Public link created"
   else
-    warn "Could not create public link — use Share → Share externally in Grafana"
+    warn "Could not auto-create public link — in Grafana: Share → Share externally"
   fi
 fi
 
