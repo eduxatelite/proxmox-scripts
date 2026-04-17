@@ -393,26 +393,30 @@ else
   curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
     "${GURL}/api/folders" -d '{"title":"Nuke","uid":"nuke"}' > /dev/null 2>&1 || true
 
-  # 2. Build import payload — Grafana 11 v2 format needs apiVersion+spec wrapper
+  # 2. Build import payload for the Grafana 11 v2 scenes API
   info "Importing dashboard…"
   python3 - <<PYEOF
 import json
 with open("${INSTALL_DIR}/nuke_dashboard.json") as f:
     dash = json.load(f)
 uid = dash.get("uid", "nuke-rlm-v8")
-wrapped = {
+payload = {
     "apiVersion": "dashboard.grafana.app/v2alpha1",
     "kind": "Dashboard",
-    "metadata": {"name": uid},
+    "metadata": {
+        "name": uid,
+        "annotations": {
+            "grafana.app/folder": "nuke"
+        }
+    },
     "spec": dash,
 }
-payload = {"dashboard": wrapped, "folderUid": "nuke", "overwrite": True}
 with open("/tmp/nuke_import_payload.json", "w") as out:
     json.dump(payload, out)
 PYEOF
 
   IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
-    "${GURL}/api/dashboards/db" \
+    "${GURL}/apis/dashboard.grafana.app/v2alpha1/namespaces/default/dashboards" \
     -d @/tmp/nuke_import_payload.json \
     2>/dev/null || true)
   sleep 2
@@ -434,10 +438,10 @@ PYEOF
     "import json,sys; d=json.load(sys.stdin); print(d[0]['uid'] if d else '')" \
     2>/dev/null || true)
 
-  # Fallback: check import response uid field
+  # Fallback: check import response (k8s API returns metadata.name)
   if [[ -z "$DASH_UID" ]]; then
     DASH_UID=$(echo "$IMPORT_RESP" | python3 -c \
-      "import json,sys; d=json.load(sys.stdin); print(d.get('uid',''))" \
+      "import json,sys; d=json.load(sys.stdin); print(d.get('metadata',{}).get('name', d.get('uid','')))" \
       2>/dev/null || true)
   fi
 
