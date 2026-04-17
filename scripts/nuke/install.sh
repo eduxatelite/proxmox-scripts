@@ -407,11 +407,14 @@ PYEOF
     2>/dev/null || true)
   sleep 2
 
-  # Show import result for debugging
-  IMPORT_STATUS=$(echo "$IMPORT_RESP" | python3 -c \
-    "import json,sys; d=json.load(sys.stdin); print(d.get('status', d.get('message', str(d)[:120])))" \
-    2>/dev/null || echo "unknown")
-  info "Import API response: ${IMPORT_STATUS}"
+  # Log everything to file for debugging
+  {
+    echo "=== IMPORT RESPONSE ==="
+    echo "$IMPORT_RESP"
+    echo ""
+    echo "=== SEARCH RESPONSE ==="
+    curl -s -u "$GAUTH" "${GURL}/api/search?query=Nuke&type=dash-db" 2>/dev/null || true
+  } > /tmp/nuke-grafana-debug.log 2>&1
 
   # 3. Find the dashboard by title (most reliable method)
   SEARCH_RESP=$(curl -s -u "$GAUTH" \
@@ -431,8 +434,7 @@ PYEOF
   if [[ -n "$DASH_UID" ]]; then
     ok "Dashboard in DB (uid: ${DASH_UID})"
   else
-    warn "Dashboard not found in DB — home works via file mount, but public link unavailable"
-    warn "Check /tmp/nuke_import_payload.json and try: curl -s -u admin:PASS ${GURL}/api/dashboards/db -X POST -H 'Content-Type: application/json' -d @/tmp/nuke_import_payload.json"
+    warn "Dashboard not in DB — debug info saved to /tmp/nuke-grafana-debug.log"
   fi
 
   # 4. Set as home dashboard for the org
@@ -463,9 +465,6 @@ fi
 # =============================================================================
 # DONE
 # =============================================================================
-echo ""
-echo -e "  ${BLD}Press Enter to continue…${RST}"
-read -r
 clear
 echo -e "${BLD}${GRN}"
 cat << DONE
@@ -485,7 +484,8 @@ echo -e "  ${BLD}${GRN}Public dashboard (no login needed):${RST}"
 echo -e "  ${GRN}●${RST}  ${BLD}${PUBLIC_URL}${RST}"
 echo ""
 fi
-echo -e "  ${BLD}Config file:${RST}  ${INSTALL_DIR}/config/exporter.env"
+echo -e "  ${BLD}Config file:${RST}       ${INSTALL_DIR}/config/exporter.env"
+echo -e "  ${BLD}Grafana setup log:${RST}  /tmp/nuke-grafana-debug.log"
 echo ""
 echo -e "  ${BLD}Useful commands:${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f nuke-exporter${RST}"
