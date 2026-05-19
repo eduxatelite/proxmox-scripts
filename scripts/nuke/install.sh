@@ -441,33 +441,231 @@ PYEOF
   fi
 fi
 
+
+# =============================================================================
+# STEP 7 — Optional Deadline Dashboard Add-on
+# =============================================================================
+DEADLINE_INSTALLED=false
+DEADLINE_PUBLIC_URL=""
+PORT_DEADLINE_EXP=""
+
+if wt_yesno "Deadline Dashboard" \
+"Would you like to install the Deadline Farm Monitor dashboard too?
+
+This add-on extends the same stack with:
+  • A Prometheus exporter for the Deadline Web Service REST API
+  • A new Grafana dashboard with Workers, Jobs, Tasks, Pools & 24h trends
+  • Lives in the same Grafana instance, in a separate 'Deadline' folder
+
+You'll need:
+  • IP / hostname & port of your Deadline Web Service (default 8081)
+  • An API key (only if Web Service auth is enabled — leave empty otherwise)
+
+Install the Deadline dashboard now?"; then
+
+  step "Deadline Farm Monitor — collecting settings"
+
+  wt_input DEADLINE_HOST "Deadline Web Service" \
+    "IP or hostname of the Deadline Web Service:" \
+    "192.168.1.50"
+  wt_input DEADLINE_PORT "Deadline Web Service" \
+    "Deadline Web Service port:" \
+    "8081"
+  wt_password DEADLINE_APIKEY "Deadline Web Service" \
+    "API Key (leave empty if auth is disabled):"
+  DEADLINE_APIKEY="${DEADLINE_APIKEY:-}"
+  wt_input PORT_DEADLINE_EXP "Deadline Exporter Port" \
+    "Local port for the Deadline exporter:" \
+    "9300"
+  wt_input DEADLINE_SCRAPE_INT "Scrape Interval" \
+    "How often (seconds) to poll Deadline:" \
+    "30"
+
+  step "Installing Deadline Farm Monitor"
+
+  REPO_DL="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/deadline"
+
+  # ── download files ─────────────────────────────────────────────────────────
+  info "Downloading Deadline exporter files…"
+  curl -fsSL "${REPO_DL}/deadline_exporter.py"            -o "${INSTALL_DIR}/deadline_exporter.py"   || die "Failed to download deadline_exporter.py"
+  curl -fsSL "${REPO_DL}/Dockerfile"                      -o "${INSTALL_DIR}/Dockerfile.deadline"    || die "Failed to download Dockerfile.deadline"
+  curl -fsSL "${REPO_DL}/grafana_deadline_dashboard.json" -o "${INSTALL_DIR}/deadline_dashboard.json" || die "Failed to download Deadline dashboard JSON"
+  ok "Files downloaded"
+
+  # ── write env ──────────────────────────────────────────────────────────────
+  info "Writing config/deadline.env…"
+  cat > "${INSTALL_DIR}/config/deadline.env" <<EOFD
+DEADLINE_HOST=${DEADLINE_HOST}
+DEADLINE_PORT=${DEADLINE_PORT}
+DEADLINE_APIKEY=${DEADLINE_APIKEY}
+EXPORTER_PORT=${PORT_DEADLINE_EXP}
+SCRAPE_INTERVAL=${DEADLINE_SCRAPE_INT}
+EOFD
+  chmod 600 "${INSTALL_DIR}/config/deadline.env"
+  ok "Config written"
+
+  # ── patch docker-compose.yml (idempotent, with backup) ─────────────────────
+  info "Patching docker-compose.yml…"
+  cp "${INSTALL_DIR}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml.bak.$(date +%s)"
+  python3 - "${INSTALL_DIR}/docker-compose.yml" "${PORT_DEADLINE_EXP}" <<'PYEOFD'
+import sys, re
+path, port = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    text = f.read()
+
+if 'container_name: deadline-exporter' in text:
+    sys.exit(0)
+
+block = f"""
+  # ── Deadline Exporter (Deadline Web Service → Prometheus metrics) ──────────
+  deadline-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.deadline
+    container_name: deadline-exporter
+    restart: unless-stopped
+    env_file: config/deadline.env
+    ports:
+      - "{port}:{port}"
+    networks:
+      - nuke
+"""
+
+text = re.sub(r'(^services:\s*\n)', r'\1' + block, text, count=1, flags=re.MULTILINE)
+with open(path, 'w') as f:
+    f.write(text)
+PYEOFD
+  ok "docker-compose.yml patched"
+
+  # ── patch prometheus.yml (idempotent, with backup) ─────────────────────────
+  info "Patching prometheus.yml…"
+  cp "${INSTALL_DIR}/prometheus/prometheus.yml" "${INSTALL_DIR}/prometheus/prometheus.yml.bak.$(date +%s)"
+  if ! grep -q 'deadline_farm_exporter' "${INSTALL_DIR}/prometheus/prometheus.yml"; then
+    cat >> "${INSTALL_DIR}/prometheus/prometheus.yml" <<EOFP
+
+  - job_name: 'deadline_farm_exporter'
+    static_configs:
+      - targets: ['deadline-exporter:${PORT_DEADLINE_EXP}']
+EOFP
+  fi
+  ok "prometheus.yml patched"
+
+  # ── build & start ──────────────────────────────────────────────────────────
+  info "Building deadline-exporter image…"
+  if ! docker compose build deadline-exporter > /tmp/deadline-build.log 2>&1; then
+    err "Deadline build failed. Last 20 lines:"
+    tail -20 /tmp/deadline-build.log
+    warn "Skipping Deadline install — Nuke remains operational."
+  else
+    ok "Image built"
+
+    info "Starting deadline-exporter and reloading Prometheus…"
+    docker compose up -d deadline-exporter > /tmp/deadline-up.log 2>&1 \
+      || warn "Failed to start deadline-exporter — see /tmp/deadline-up.log"
+    docker compose restart prometheus > /tmp/deadline-prom-reload.log 2>&1 || true
+
+    sleep 4
+
+    # ── import Deadline dashboard ───────────────────────────────────────────
+    if [[ "$STATUS" == "200" ]]; then
+      info "Importing Deadline dashboard into Grafana…"
+
+      # 1. Create Deadline folder (ignore if it already exists)
+      curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+        "${GURL}/api/folders" -d '{"title":"Deadline","uid":"deadline"}' > /dev/null 2>&1 || true
+
+      # 2. Build payload
+      python3 - <<PYIMP
+import json
+with open("${INSTALL_DIR}/deadline_dashboard.json") as f:
+    dash = json.load(f)
+payload = {"dashboard": dash, "folderUid": "deadline", "overwrite": True}
+with open("/tmp/deadline_import_payload.json", "w") as out:
+    json.dump(payload, out)
+PYIMP
+
+      D_IMPORT_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+        "${GURL}/api/dashboards/db" \
+        -d @/tmp/deadline_import_payload.json 2>/dev/null || true)
+      DEADLINE_DASH_UID=$(echo "$D_IMPORT_RESP" | python3 -c \
+        "import json,sys; d=json.load(sys.stdin); print(d.get('uid','deadline-farm-v1'))" \
+        2>/dev/null || echo "deadline-farm-v1")
+      ok "Deadline dashboard imported (uid: ${DEADLINE_DASH_UID})"
+
+      # 3. Public link
+      D_PUBLIC_RESP=$(curl -s -X POST -H "Content-Type: application/json" -u "$GAUTH" \
+        "${GURL}/api/dashboards/uid/${DEADLINE_DASH_UID}/public-dashboards" \
+        -d '{"isEnabled":true,"annotationsEnabled":false,"timeSelectionEnabled":false}' \
+        2>/dev/null || true)
+      D_ACCESS_TOKEN=$(echo "$D_PUBLIC_RESP" | python3 -c \
+        "import json,sys; d=json.load(sys.stdin); print(d.get('accessToken',''))" \
+        2>/dev/null || true)
+      if [[ -n "$D_ACCESS_TOKEN" ]]; then
+        DEADLINE_PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/public-dashboards/${D_ACCESS_TOKEN}"
+        ok "Public link created"
+      else
+        DEADLINE_PUBLIC_URL="http://${SERVER_IP}:${PORT_GRAFANA}/d/${DEADLINE_DASH_UID}"
+      fi
+    else
+      warn "Grafana not reachable — Deadline exporter is running but the dashboard"
+      warn "must be imported manually from ${INSTALL_DIR}/deadline_dashboard.json"
+    fi
+
+    DEADLINE_INSTALLED=true
+    ok "Deadline Farm Monitor installed"
+  fi
+fi
+
 # =============================================================================
 # DONE
 # =============================================================================
 clear
 echo -e "${BLD}${GRN}"
+if [[ "$DEADLINE_INSTALLED" == "true" ]]; then
+cat << DONE
+  ╔══════════════════════════════════════════════════════════════╗
+  ║   NUKE + DEADLINE DASHBOARDS — Installation Complete         ║
+  ╚══════════════════════════════════════════════════════════════╝
+DONE
+else
 cat << DONE
   ╔══════════════════════════════════════════════════════════════╗
   ║        NUKE LICENSE DASHBOARD — Installation Complete        ║
   ╚══════════════════════════════════════════════════════════════╝
 DONE
+fi
 echo -e "${RST}"
 
 echo -e "  ${BLD}Access your services:${RST}"
 echo -e "  ${GRN}●${RST}  ${BLD}Grafana Dashboard  →  http://${SERVER_IP}:${PORT_GRAFANA}${RST}  (admin / ${GRAFANA_PASS})"
 echo -e "  ${BLU}●${RST}  Prometheus         →  http://${SERVER_IP}:${PORT_PROM}"
-echo -e "  ${YLW}●${RST}  License Exporter   →  http://${SERVER_IP}:${PORT_EXPORTER}/metrics"
+echo -e "  ${YLW}●${RST}  Nuke Exporter      →  http://${SERVER_IP}:${PORT_EXPORTER}/metrics"
+if [[ "$DEADLINE_INSTALLED" == "true" ]]; then
+echo -e "  ${CYN}●${RST}  Deadline Exporter  →  http://${SERVER_IP}:${PORT_DEADLINE_EXP}/metrics"
+fi
 echo ""
+if [[ -n "$PUBLIC_URL" || -n "$DEADLINE_PUBLIC_URL" ]]; then
+echo -e "  ${BLD}${GRN}Public dashboards (no login needed):${RST}"
 if [[ -n "$PUBLIC_URL" ]]; then
-echo -e "  ${BLD}${GRN}Public dashboard (no login needed):${RST}"
-echo -e "  ${GRN}●${RST}  ${BLD}${PUBLIC_URL}${RST}"
+echo -e "  ${GRN}●${RST}  Nuke      →  ${BLD}${PUBLIC_URL}${RST}"
+fi
+if [[ "$DEADLINE_INSTALLED" == "true" && -n "$DEADLINE_PUBLIC_URL" ]]; then
+echo -e "  ${GRN}●${RST}  Deadline  →  ${BLD}${DEADLINE_PUBLIC_URL}${RST}"
+fi
 echo ""
 fi
-echo -e "  ${BLD}Config file:${RST}       ${INSTALL_DIR}/config/exporter.env"
+echo -e "  ${BLD}Config files:${RST}"
+echo -e "    Nuke      →  ${INSTALL_DIR}/config/exporter.env"
+if [[ "$DEADLINE_INSTALLED" == "true" ]]; then
+echo -e "    Deadline  →  ${INSTALL_DIR}/config/deadline.env"
+fi
 echo -e "  ${BLD}Grafana setup log:${RST}  /tmp/nuke-grafana-debug.log"
 echo ""
 echo -e "  ${BLD}Useful commands:${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f nuke-exporter${RST}"
+if [[ "$DEADLINE_INSTALLED" == "true" ]]; then
+echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose logs -f deadline-exporter${RST}"
+fi
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose restart${RST}"
 echo -e "  ${CYN}cd ${INSTALL_DIR} && docker compose down${RST}"
 echo ""
