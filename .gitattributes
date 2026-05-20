@@ -1,0 +1,33 @@
+# Force LF line endings on all text files in this repo.
+# These scripts are downloaded via `curl | bash` on Linux VMs — CRLF breaks them.
+* text=auto eol=lf
+
+# Shell / Python / config scripts: hard-force LF
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.py        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.ks        text eol=lf
+*.cfg       text eol=lf
+*.conf      text eol=lf
+*.env       text eol=lf
+*.service   text eol=lf
+Dockerfile* text eol=lf
+
+# Markdown / docs
+*.md   text eol=lf
+
+# Binary files — never touch
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.zip    binary
+*.gz     binary
+*.tar    binary
+*.pdf    binary
+*.exe    binary
+rlmutil  binary
