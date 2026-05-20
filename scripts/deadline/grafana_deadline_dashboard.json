@@ -249,7 +249,7 @@
       "fieldConfig": { "defaults": {}, "overrides": [] },
       "options": {
         "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
-        "content": "<div style='background:#7E57C2;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px'>📋  Jobs</div>",
+        "content": "<div style='background:#7E57C2;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center'><span>📋  Jobs</span><span style='font-size:11px;font-weight:500;opacity:0.85'>last 60 days · set JOBS_MAX_AGE_DAYS to change</span></div>",
         "mode": "html"
       },
       "targets": [],
