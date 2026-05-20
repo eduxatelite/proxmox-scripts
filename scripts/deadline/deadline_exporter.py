@@ -88,6 +88,13 @@ g_jobs_window      = Gauge("deadline_jobs_window_days",         "Age window appl
 g_pool_workers     = Gauge("deadline_pool_workers", "Workers per pool", ["pool"])
 g_pool_jobs        = Gauge("deadline_pool_jobs",    "Jobs per pool",    ["pool"])
 
+# Per-worker presence metrics (value=1 when worker is in that state).
+# Cleared every scrape so workers that change state move cleanly.
+g_worker_rendering = Gauge("deadline_worker_rendering", "Worker is currently rendering (1)", ["name", "pool"])
+g_worker_idle      = Gauge("deadline_worker_idle",      "Worker is idle (1)",                 ["name", "pool"])
+g_worker_offline   = Gauge("deadline_worker_offline",   "Worker is offline (1)",              ["name", "pool"])
+g_worker_stalled   = Gauge("deadline_worker_stalled",   "Worker is stalled or disabled (1)",  ["name", "pool"])
+
 # Per-department aggregates (Production View)
 g_dept_pending_jobs   = Gauge("deadline_dept_pending_jobs",       "Pending jobs per department",                ["department"])
 g_dept_pending_tasks  = Gauge("deadline_dept_pending_tasks",      "Pending tasks per department",               ["department"])
@@ -97,9 +104,9 @@ g_dept_est_secs_left  = Gauge("deadline_dept_est_seconds_left",   "Estimated sec
 # Per-job metrics — ONLY set for jobs with RenderingChunks > 0 so cardinality
 # stays bounded. Cleared at the start of every scrape so finished/stopped
 # jobs disappear immediately from the dashboard.
-g_job_progress_pct   = Gauge("deadline_job_progress_pct",      "Job render progress %",          ["job_id", "name", "pool"])
-g_job_remaining_secs = Gauge("deadline_job_remaining_seconds", "Estimated seconds remaining",    ["job_id", "name", "pool"])
-g_job_elapsed_secs   = Gauge("deadline_job_elapsed_seconds",   "Seconds since job started",      ["job_id", "name", "pool"])
+g_job_progress_pct   = Gauge("deadline_job_progress_pct",      "Job render progress %",          ["job_id", "name", "pool", "department"])
+g_job_remaining_secs = Gauge("deadline_job_remaining_seconds", "Estimated seconds remaining",    ["job_id", "name", "pool", "department"])
+g_job_elapsed_secs   = Gauge("deadline_job_elapsed_seconds",   "Seconds since job started",      ["job_id", "name", "pool", "department"])
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -232,8 +239,16 @@ def collect():
     # ── workers ─────────────────────────────────────────────────────────────
     if workers is not None:
         WORKER_STAT = {0:"unknown", 1:"rendering", 2:"idle", 3:"offline", 4:"disabled", 5:"stalled"}
-        status_map = {}
+        status_map   = {}
         pool_workers = {}
+
+        # Clear per-worker presence gauges so workers that change state don't
+        # leave stale series behind.
+        g_worker_rendering.clear()
+        g_worker_idle.clear()
+        g_worker_offline.clear()
+        g_worker_stalled.clear()
+
         for w in workers:
             info     = w.get("Info", w)
             settings = w.get("Settings", {})
@@ -243,6 +258,16 @@ def collect():
             status_map[status] = status_map.get(status, 0) + 1
             pool = info.get("Pools", "none") or "none"
             pool_workers[pool] = pool_workers.get(pool, 0) + 1
+
+            wname = info.get("Name", "") or "(unnamed)"
+            if status == "rendering":
+                g_worker_rendering.labels(name=wname, pool=pool).set(1)
+            elif status == "idle":
+                g_worker_idle.labels(name=wname, pool=pool).set(1)
+            elif status in ("offline", "unknown"):
+                g_worker_offline.labels(name=wname, pool=pool).set(1)
+            elif status in ("stalled", "disabled"):
+                g_worker_stalled.labels(name=wname, pool=pool).set(1)
 
         g_workers_active.set(status_map.get("rendering", 0))
         g_workers_idle.set(status_map.get("idle", 0))
@@ -318,9 +343,9 @@ def collect():
                         secs_per_task = elapsed_s / completed_chunks
                         remaining = secs_per_task * max(0, tasks_n - completed_chunks)
 
-                g_job_progress_pct.labels(job_id=job_id, name=short_name, pool=pool).set(progress)
-                g_job_remaining_secs.labels(job_id=job_id, name=short_name, pool=pool).set(remaining)
-                g_job_elapsed_secs.labels(job_id=job_id, name=short_name, pool=pool).set(elapsed_s)
+                g_job_progress_pct.labels(job_id=job_id, name=short_name, pool=pool, department=dept).set(progress)
+                g_job_remaining_secs.labels(job_id=job_id, name=short_name, pool=pool, department=dept).set(remaining)
+                g_job_elapsed_secs.labels(job_id=job_id, name=short_name, pool=pool, department=dept).set(elapsed_s)
 
         # Set aggregate job counters
         g_jobs_rendering.set(job_counts["rendering"])
