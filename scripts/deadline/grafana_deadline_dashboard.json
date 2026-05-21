@@ -5,7 +5,7 @@
   "description": "Deadline Render Farm — Workers, Jobs, Currently Rendering, Production View & Trends",
   "tags": ["deadline", "render", "farm", "thinkbox"],
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "10s",
   "time": { "from": "now-24h", "to": "now" },
   "timepicker": {},
@@ -18,133 +18,150 @@
         "content":"<div style='background:#1E88E5;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px'>🖥️  Workers</div>","mode":"html"},
       "targets":[], "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 2, "type": "stat", "title": "Rendering", "gridPos": {"x":0,"y":2,"w":4,"h":8},
-      "fieldConfig":{"defaults":{
-        "color":{"fixedColor":"#4CAF50","mode":"fixed"},
-        "noValue":"—","unit":"none"
-      },"overrides":[]},
-      "options":{
-        "colorMode":"background","graphMode":"none","justifyMode":"auto","orientation":"horizontal",
-        "reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true},
-        "textMode":"name","wideLayout":true
-      },
-      "targets":[{"expr":"deadline_worker_rendering","instant":true,"legendFormat":"{{name}}","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
+    { "id": 2, "type": "stat", "title": "Rendering", "gridPos": {"x":0,"y":2,"w":4,"h":5},
+      "fieldConfig":{"defaults":{"color":{"fixedColor":"#4CAF50","mode":"fixed"},"decimals":0,
+        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
+      "options":{"colorMode":"background","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
+      "targets":[{"expr":"deadline_workers_active","instant":true,"legendFormat":"Rendering","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 3, "type": "stat", "title": "Idle", "gridPos": {"x":4,"y":2,"w":4,"h":8},
-      "fieldConfig":{"defaults":{
-        "color":{"fixedColor":"#9CCC65","mode":"fixed"},
-        "noValue":"—","unit":"none"
-      },"overrides":[]},
-      "options":{
-        "colorMode":"background","graphMode":"none","justifyMode":"auto","orientation":"horizontal",
-        "reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true},
-        "textMode":"name","wideLayout":true
-      },
-      "targets":[{"expr":"deadline_worker_idle","instant":true,"legendFormat":"{{name}}","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
+    { "id": 3, "type": "stat", "title": "Idle", "gridPos": {"x":4,"y":2,"w":4,"h":5},
+      "fieldConfig":{"defaults":{"color":{"fixedColor":"#9CCC65","mode":"fixed"},"decimals":0,
+        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
+      "options":{"colorMode":"background","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
+      "targets":[{"expr":"deadline_workers_idle","instant":true,"legendFormat":"Idle","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 4, "type": "stat", "title": "Offline", "gridPos": {"x":8,"y":2,"w":4,"h":8},
-      "fieldConfig":{"defaults":{
-        "color":{"fixedColor":"#EF5350","mode":"fixed"},
-        "noValue":"—","unit":"none"
-      },"overrides":[]},
-      "options":{
-        "colorMode":"background","graphMode":"none","justifyMode":"auto","orientation":"horizontal",
-        "reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true},
-        "textMode":"name","wideLayout":true
-      },
-      "targets":[{"expr":"deadline_worker_offline","instant":true,"legendFormat":"{{name}}","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
+    { "id": 4, "type": "stat", "title": "Offline", "gridPos": {"x":8,"y":2,"w":4,"h":5},
+      "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,
+        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"yellow","value":1},{"color":"red","value":5}]},"unit":"none"},"overrides":[]},
+      "options":{"colorMode":"background","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
+      "targets":[{"expr":"deadline_workers_offline","instant":true,"legendFormat":"Offline","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 5, "type": "stat", "title": "Stalled", "gridPos": {"x":12,"y":2,"w":4,"h":8},
-      "fieldConfig":{"defaults":{
-        "color":{"fixedColor":"#FFA726","mode":"fixed"},
-        "noValue":"—","unit":"none"
-      },"overrides":[]},
-      "options":{
-        "colorMode":"background","graphMode":"none","justifyMode":"auto","orientation":"horizontal",
-        "reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true},
-        "textMode":"name","wideLayout":true
-      },
-      "targets":[{"expr":"deadline_worker_stalled","instant":true,"legendFormat":"{{name}}","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
+    { "id": 5, "type": "stat", "title": "Stalled", "gridPos": {"x":12,"y":2,"w":4,"h":5},
+      "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,
+        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"red","value":1}]},"unit":"none"},"overrides":[]},
+      "options":{"colorMode":"background","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
+      "targets":[{"expr":"deadline_workers_stalled","instant":true,"legendFormat":"Stalled","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 6, "type": "stat", "title": "Total", "gridPos": {"x":16,"y":2,"w":4,"h":8},
+    { "id": 6, "type": "stat", "title": "Total", "gridPos": {"x":16,"y":2,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"fixedColor":"#1E88E5","mode":"fixed"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"none","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_workers_total","instant":true,"legendFormat":"Total","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 7, "type": "gauge", "title": "Farm utilization", "gridPos": {"x":20,"y":2,"w":4,"h":8},
+    { "id": 7, "type": "gauge", "title": "Farm utilization", "gridPos": {"x":20,"y":2,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,"max":100,"min":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"yellow","value":60},{"color":"red","value":90}]},"unit":"percent"},"overrides":[]},
       "options":{"orientation":"auto","reduceOptions":{"calcs":["lastNotNull"]},"showThresholdLabels":false,"showThresholdMarkers":true},
       "targets":[{"expr":"deadline_farm_utilization_pct","instant":true,"legendFormat":"Utilization","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 8, "type": "text", "title": "", "gridPos": {"x":0,"y":10,"w":24,"h":2},
+    { "id": 29, "type": "table", "title": "Workers detail", "gridPos": {"x":0,"y":7,"w":24,"h":8},
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align":"left", "cellOptions":{"type":"auto"}, "filterable":true, "inspect":false },
+          "thresholds": {"mode":"absolute","steps":[{"color":"text","value":0}]}
+        },
+        "overrides": [
+          { "matcher":{"id":"byName","options":"name"},
+            "properties":[{"id":"displayName","value":"Worker"},{"id":"custom.width","value":160}] },
+          { "matcher":{"id":"byName","options":"pool"},
+            "properties":[{"id":"displayName","value":"Pool"},{"id":"custom.width","value":240}] },
+          { "matcher":{"id":"byName","options":"Value"},
+            "properties":[
+              {"id":"displayName","value":"State"},
+              {"id":"custom.cellOptions","value":{"type":"color-background","mode":"basic"}},
+              {"id":"mappings","value":[
+                {"type":"value","options":{
+                  "0":{"text":"Unknown","color":"#9E9E9E","index":0},
+                  "1":{"text":"Rendering","color":"#4CAF50","index":1},
+                  "2":{"text":"Idle","color":"#9CCC65","index":2},
+                  "3":{"text":"Offline","color":"#EF5350","index":3},
+                  "4":{"text":"Stalled","color":"#FFA726","index":4}
+                }}
+              ]},
+              {"id":"custom.width","value":140}
+            ] }
+        ]
+      },
+      "options": { "cellHeight":"sm", "showHeader":true,
+        "sortBy":[{"desc":false,"displayName":"State"}],
+        "footer":{"countRows":false,"fields":"","reducer":["sum"],"show":false}
+      },
+      "transformations": [
+        { "id":"organize", "options":{
+            "excludeByName": {
+              "Time": true, "__name__": true, "instance": true, "job": true
+            },
+            "indexByName": { "name": 0, "pool": 1, "Value": 2 },
+            "renameByName": {}
+        }}
+      ],
+      "targets": [
+        { "expr":"deadline_worker_state", "format":"table","instant":true,"refId":"A",
+          "datasource":{"uid":"prometheus","type":"prometheus"} }
+      ],
+      "datasource": {"uid":"prometheus","type":"prometheus"} },
+
+    { "id": 8, "type": "text", "title": "", "gridPos": {"x":0,"y":15,"w":24,"h":2},
       "fieldConfig":{"defaults":{},"overrides":[]},
       "options":{"code":{"language":"plaintext","showLineNumbers":false,"showMiniMap":false},
         "content":"<div style='background:#7E57C2;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center'><span>📋  Jobs</span><span style='font-size:11px;font-weight:500;opacity:0.85'>last 60 days · set JOBS_MAX_AGE_DAYS to change</span></div>","mode":"html"},
       "targets":[], "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 9, "type": "stat", "title": "Rendering", "gridPos": {"x":0,"y":12,"w":4,"h":8},
-      "fieldConfig":{"defaults":{
-        "color":{"fixedColor":"#42A5F5","mode":"fixed"},
-        "noValue":"—","unit":"none"
-      },"overrides":[]},
-      "options":{
-        "colorMode":"background","graphMode":"none","justifyMode":"auto","orientation":"horizontal",
-        "reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":true},
-        "textMode":"name","wideLayout":true
-      },
-      "targets":[{"expr":"deadline_job_progress_pct","instant":true,"legendFormat":"{{name}}","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
+    { "id": 9, "type": "stat", "title": "Rendering", "gridPos": {"x":0,"y":17,"w":4,"h":5},
+      "fieldConfig":{"defaults":{"color":{"fixedColor":"#42A5F5","mode":"fixed"},"decimals":0,
+        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
+      "options":{"colorMode":"background","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
+      "targets":[{"expr":"deadline_jobs_rendering","instant":true,"legendFormat":"Rendering","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 10, "type": "stat", "title": "Queued", "gridPos": {"x":4,"y":12,"w":4,"h":8},
+    { "id": 10, "type": "stat", "title": "Queued", "gridPos": {"x":4,"y":17,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"yellow","value":1},{"color":"orange","value":10}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"background","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_jobs_queued","instant":true,"legendFormat":"Queued","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 11, "type": "stat", "title": "Failed", "gridPos": {"x":8,"y":12,"w":4,"h":8},
+    { "id": 11, "type": "stat", "title": "Failed", "gridPos": {"x":8,"y":17,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"red","value":1}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"background","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_jobs_failed","instant":true,"legendFormat":"Failed","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 12, "type": "stat", "title": "Suspended", "gridPos": {"x":12,"y":12,"w":4,"h":8},
+    { "id": 12, "type": "stat", "title": "Suspended", "gridPos": {"x":12,"y":17,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"fixedColor":"#FFB74D","mode":"fixed"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"background","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_jobs_suspended","instant":true,"legendFormat":"Suspended","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 13, "type": "stat", "title": "Completed", "gridPos": {"x":16,"y":12,"w":4,"h":8},
+    { "id": 13, "type": "stat", "title": "Completed", "gridPos": {"x":16,"y":17,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"fixedColor":"#66BB6A","mode":"fixed"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"none","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_jobs_completed","instant":true,"legendFormat":"Completed","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 14, "type": "stat", "title": "Total", "gridPos": {"x":20,"y":12,"w":4,"h":8},
+    { "id": 14, "type": "stat", "title": "Total", "gridPos": {"x":20,"y":17,"w":4,"h":5},
       "fieldConfig":{"defaults":{"color":{"fixedColor":"#7E57C2","mode":"fixed"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"none","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value","wideLayout":true},
       "targets":[{"expr":"deadline_jobs_total","instant":true,"legendFormat":"Total","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 15, "type": "text", "title": "", "gridPos": {"x":0,"y":20,"w":24,"h":2},
+    { "id": 15, "type": "text", "title": "", "gridPos": {"x":0,"y":22,"w":24,"h":2},
       "fieldConfig":{"defaults":{},"overrides":[]},
       "options":{"code":{"language":"plaintext","showLineNumbers":false,"showMiniMap":false},
         "content":"<div style='background:#EF6C00;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px'>🎬  Currently rendering</div>","mode":"html"},
       "targets":[], "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 16, "type": "table", "title": "Active jobs", "gridPos": {"x":0,"y":22,"w":24,"h":10},
+    { "id": 16, "type": "table", "title": "Active jobs", "gridPos": {"x":0,"y":24,"w":24,"h":10},
       "fieldConfig": {
         "defaults": {
           "custom": { "align":"left", "cellOptions":{"type":"auto"}, "filterable":false, "inspect":false },
@@ -153,10 +170,10 @@
         "overrides": [
           { "matcher":{"id":"byName","options":"name"},
             "properties":[{"id":"displayName","value":"Job"},{"id":"custom.width","value":480}] },
-          { "matcher":{"id":"byName","options":"department"},
-            "properties":[{"id":"displayName","value":"Department"},{"id":"custom.width","value":120}] },
           { "matcher":{"id":"byName","options":"pool"},
             "properties":[{"id":"displayName","value":"Pool"},{"id":"custom.width","value":140}] },
+          { "matcher":{"id":"byName","options":"department"},
+            "properties":[{"id":"displayName","value":"Department"},{"id":"custom.width","value":120}] },
           { "matcher":{"id":"byName","options":"Value #A"},
             "properties":[
               {"id":"displayName","value":"Progress"},
@@ -186,10 +203,16 @@
               "instance": true, "instance 1": true, "instance 2": true,
               "job": true, "job 1": true, "job 2": true,
               "job_id": true,
-              "name 2": true, "pool 2": true, "department 2": true
+              "name 1": true, "name 2": true,
+              "pool 1": true, "pool 2": true,
+              "department 1": true, "department 2": true
             },
             "indexByName": {
-              "name": 0, "department": 1, "pool": 2, "Value #A": 3, "Value #B": 4
+              "name": 0,
+              "pool": 1,
+              "department": 2,
+              "Value #A": 3,
+              "Value #B": 4
             },
             "renameByName": {}
         }}
@@ -202,13 +225,13 @@
       ],
       "datasource": {"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 17, "type": "text", "title": "", "gridPos": {"x":0,"y":32,"w":24,"h":2},
+    { "id": 17, "type": "text", "title": "", "gridPos": {"x":0,"y":34,"w":24,"h":2},
       "fieldConfig":{"defaults":{},"overrides":[]},
       "options":{"code":{"language":"plaintext","showLineNumbers":false,"showMiniMap":false},
         "content":"<div style='background:#5E35B1;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center'><span>🏭  Production view — work remaining by department</span><span style='font-size:11px;font-weight:500;opacity:0.85'>department extracted from job name · set DEPT_REGEX to change</span></div>","mode":"html"},
       "targets":[], "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 18, "type": "bargauge", "title": "Pending Jobs", "gridPos":{"x":0,"y":34,"w":6,"h":10},
+    { "id": 18, "type": "bargauge", "title": "Pending Jobs", "gridPos":{"x":0,"y":36,"w":6,"h":10},
       "fieldConfig":{"defaults":{
         "color":{"mode":"continuous-BlPu"}, "decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]}, "unit":"none"
@@ -219,7 +242,7 @@
       "targets":[{"expr":"deadline_dept_pending_jobs","legendFormat":"{{department}}","instant":true,"refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 19, "type": "bargauge", "title": "Pending Tasks", "gridPos":{"x":6,"y":34,"w":6,"h":10},
+    { "id": 19, "type": "bargauge", "title": "Pending Tasks", "gridPos":{"x":6,"y":36,"w":6,"h":10},
       "fieldConfig":{"defaults":{
         "color":{"mode":"continuous-BlPu"}, "decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]}, "unit":"none"
@@ -230,7 +253,7 @@
       "targets":[{"expr":"deadline_dept_pending_tasks","legendFormat":"{{department}}","instant":true,"refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 20, "type": "bargauge", "title": "Avg Time per Task", "gridPos":{"x":12,"y":34,"w":6,"h":10},
+    { "id": 20, "type": "bargauge", "title": "Avg Time per Task", "gridPos":{"x":12,"y":36,"w":6,"h":10},
       "fieldConfig":{"defaults":{
         "color":{"mode":"continuous-BlYlRd"}, "decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]}, "unit":"s"
@@ -241,7 +264,7 @@
       "targets":[{"expr":"deadline_dept_avg_task_seconds","legendFormat":"{{department}}","instant":true,"refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 21, "type": "bargauge", "title": "Estimated Time Left", "gridPos":{"x":18,"y":34,"w":6,"h":10},
+    { "id": 21, "type": "bargauge", "title": "Estimated Time Left", "gridPos":{"x":18,"y":36,"w":6,"h":10},
       "fieldConfig":{"defaults":{
         "color":{"mode":"continuous-RdYlGr"}, "decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0}]}, "unit":"s"
@@ -252,13 +275,13 @@
       "targets":[{"expr":"deadline_dept_est_seconds_left","legendFormat":"{{department}}","instant":true,"refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 22, "type": "text", "title": "", "gridPos": {"x":0,"y":44,"w":24,"h":2},
+    { "id": 22, "type": "text", "title": "", "gridPos": {"x":0,"y":46,"w":24,"h":2},
       "fieldConfig":{"defaults":{},"overrides":[]},
       "options":{"code":{"language":"plaintext","showLineNumbers":false,"showMiniMap":false},
         "content":"<div style='background:#455A64;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px'>📈  Trends — last 24h</div>","mode":"html"},
       "targets":[], "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 23, "type": "timeseries", "title": "Workers over time", "gridPos":{"x":0,"y":46,"w":12,"h":8},
+    { "id": 23, "type": "timeseries", "title": "Workers over time", "gridPos":{"x":0,"y":48,"w":12,"h":8},
       "fieldConfig":{"defaults":{
         "custom":{"drawStyle":"line","lineInterpolation":"smooth","lineWidth":2,"fillOpacity":15,"gradientMode":"opacity","showPoints":"never","stacking":{"mode":"none"}},
         "color":{"mode":"palette-classic"},"unit":"none"},
@@ -277,7 +300,7 @@
       ],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 24, "type": "timeseries", "title": "Jobs over time", "gridPos":{"x":12,"y":46,"w":12,"h":8},
+    { "id": 24, "type": "timeseries", "title": "Jobs over time", "gridPos":{"x":12,"y":48,"w":12,"h":8},
       "fieldConfig":{"defaults":{
         "custom":{"drawStyle":"line","lineInterpolation":"smooth","lineWidth":2,"fillOpacity":15,"gradientMode":"opacity","showPoints":"never","stacking":{"mode":"none"}},
         "color":{"mode":"palette-classic"},"unit":"none"},
@@ -296,7 +319,7 @@
       ],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 25, "type": "timeseries", "title": "Farm utilization %", "gridPos":{"x":0,"y":54,"w":24,"h":6},
+    { "id": 25, "type": "timeseries", "title": "Farm utilization %", "gridPos":{"x":0,"y":56,"w":24,"h":6},
       "fieldConfig":{"defaults":{
         "custom":{"drawStyle":"line","lineInterpolation":"smooth","lineWidth":2,"fillOpacity":25,"gradientMode":"opacity","showPoints":"never"},
         "color":{"fixedColor":"#42A5F5","mode":"fixed"},"max":100,"min":0,"unit":"percent"},"overrides":[]},
@@ -304,7 +327,7 @@
       "targets":[{"expr":"deadline_farm_utilization_pct","legendFormat":"Utilization","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 26, "type": "stat", "title": "Exporter health", "gridPos":{"x":0,"y":60,"w":6,"h":3},
+    { "id": 26, "type": "stat", "title": "Exporter health", "gridPos":{"x":0,"y":62,"w":6,"h":3},
       "fieldConfig":{"defaults":{
         "color":{"mode":"thresholds"},"decimals":0,
         "mappings":[{"type":"value","options":{"0":{"text":"DOWN","color":"red"},"1":{"text":"UP","color":"green"}}}],
@@ -313,14 +336,14 @@
       "targets":[{"expr":"deadline_up","instant":true,"legendFormat":"up","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 27, "type": "stat", "title": "Scrape duration", "gridPos":{"x":6,"y":60,"w":6,"h":3},
+    { "id": 27, "type": "stat", "title": "Scrape duration", "gridPos":{"x":6,"y":62,"w":6,"h":3},
       "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":2,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"yellow","value":1},{"color":"red","value":5}]},"unit":"s"},"overrides":[]},
       "options":{"colorMode":"value","graphMode":"area","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"auto","wideLayout":true},
       "targets":[{"expr":"deadline_scrape_duration_seconds","instant":true,"legendFormat":"Scrape","refId":"A","datasource":{"uid":"prometheus","type":"prometheus"}}],
       "datasource":{"uid":"prometheus","type":"prometheus"} },
 
-    { "id": 28, "type": "stat", "title": "Scrape errors (1h)", "gridPos":{"x":12,"y":60,"w":6,"h":3},
+    { "id": 28, "type": "stat", "title": "Scrape errors (1h)", "gridPos":{"x":12,"y":62,"w":6,"h":3},
       "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"decimals":0,
         "thresholds":{"mode":"absolute","steps":[{"color":"green","value":0},{"color":"red","value":1}]},"unit":"none"},"overrides":[]},
       "options":{"colorMode":"value","graphMode":"none","reduceOptions":{"calcs":["lastNotNull"]},"textMode":"auto","wideLayout":true},

@@ -95,6 +95,13 @@ g_worker_idle      = Gauge("deadline_worker_idle",      "Worker is idle (1)",   
 g_worker_offline   = Gauge("deadline_worker_offline",   "Worker is offline (1)",              ["name", "pool"])
 g_worker_stalled   = Gauge("deadline_worker_stalled",   "Worker is stalled or disabled (1)",  ["name", "pool"])
 
+# Combined worker state metric — value encodes the state (1=rendering,
+# 2=idle, 3=offline, 4=stalled, 0=unknown). One series per worker. Used by
+# the Workers detail table in the dashboard.
+g_worker_state = Gauge("deadline_worker_state",
+                       "Worker state (1=rendering 2=idle 3=offline 4=stalled 0=unknown)",
+                       ["name", "pool"])
+
 # Per-department aggregates (Production View)
 g_dept_pending_jobs   = Gauge("deadline_dept_pending_jobs",       "Pending jobs per department",                ["department"])
 g_dept_pending_tasks  = Gauge("deadline_dept_pending_tasks",      "Pending tasks per department",               ["department"])
@@ -248,6 +255,10 @@ def collect():
         g_worker_idle.clear()
         g_worker_offline.clear()
         g_worker_stalled.clear()
+        g_worker_state.clear()
+
+        STATE_NUM = {"rendering": 1, "idle": 2, "offline": 3, "unknown": 3,
+                     "stalled": 4, "disabled": 4}
 
         for w in workers:
             info     = w.get("Info", w)
@@ -268,6 +279,8 @@ def collect():
                 g_worker_offline.labels(name=wname, pool=pool).set(1)
             elif status in ("stalled", "disabled"):
                 g_worker_stalled.labels(name=wname, pool=pool).set(1)
+
+            g_worker_state.labels(name=wname, pool=pool).set(STATE_NUM.get(status, 0))
 
         g_workers_active.set(status_map.get("rendering", 0))
         g_workers_idle.set(status_map.get("idle", 0))
