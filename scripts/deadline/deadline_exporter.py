@@ -345,16 +345,29 @@ def collect():
             if rendering_chunks > 0:
                 job_id = j.get("_id", "") or name[:24]
                 short_name = (name[:80] + "…") if len(name) > 80 else name
-                progress = (completed_chunks / tasks_n * 100) if tasks_n > 0 else 0
+
+                # SnglTskPrg is the progress (e.g. "45 %") of the task currently
+                # being rendered. Without this, progress stays at 0% until the
+                # first task completes — which on slow tasks can take hours.
+                sng_raw = j.get("SnglTskPrg", "0 %") or "0 %"
+                try:
+                    single_task_pct = float(str(sng_raw).rstrip(" %")) / 100.0
+                    single_task_pct = max(0.0, min(1.0, single_task_pct))
+                except (ValueError, AttributeError):
+                    single_task_pct = 0.0
+
+                effective_done = completed_chunks + (rendering_chunks * single_task_pct)
+                progress = (effective_done / tasks_n * 100) if tasks_n > 0 else 0
+                progress = max(0, min(100, progress))
 
                 ds = parse_iso_date(j.get("DateStart"))
                 elapsed_s  = 0
                 remaining  = 0
                 if ds:
                     elapsed_s = max(0, (now - ds).total_seconds())
-                    if completed_chunks > 0:
-                        secs_per_task = elapsed_s / completed_chunks
-                        remaining = secs_per_task * max(0, tasks_n - completed_chunks)
+                    if effective_done > 0:
+                        secs_per_task = elapsed_s / effective_done
+                        remaining = secs_per_task * max(0, tasks_n - effective_done)
 
                 g_job_progress_pct.labels(job_id=job_id, name=short_name, pool=pool, department=dept).set(progress)
                 g_job_remaining_secs.labels(job_id=job_id, name=short_name, pool=pool, department=dept).set(remaining)
