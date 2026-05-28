@@ -101,41 +101,29 @@
         { "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node, id) (pve_disk_usage_bytes{id=~\"storage/.*\", node=~\"$node\"}) / max by (node, id) (pve_disk_size_bytes{id=~\"storage/.*\", node=~\"$node\"})", "legendFormat": "{{node}} {{id}}", "instant": true, "refId": "C" }
       ]
     },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 }, "id": 203, "title": "Network", "type": "row" },
     {
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" }, "unit": "Bps" }, "overrides": [] },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 }, "id": 30,
-      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "title": "Network I/O per Node", "type": "timeseries",
-      "targets": [
-        { "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (rate(pve_network_transmit_bytes_total{id=~\"node/.*\", node=~\"$node\"}[5m]))", "legendFormat": "{{node}} TX", "refId": "A" },
-        { "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (rate(pve_network_receive_bytes_total{id=~\"node/.*\", node=~\"$node\"}[5m]))", "legendFormat": "{{node}} RX", "refId": "B" }
-      ]
-    },
-    {
-      "collapsed": true, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }, "id": 204,
+      "collapsed": true, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 }, "id": 204,
       "panels": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "orange", "value": 75 }, { "color": "red", "value": 85 }] }, "unit": "celsius", "min": 0, "max": 100 }, "overrides": [] },
-          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 33 }, "id": 40,
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 }, "id": 40,
           "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showUnfilled": true },
-          "title": "CPU Temperature (requires node_exporter)", "type": "bargauge",
-          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (instance) (node_hwmon_temp_celsius{chip=~\".*coretemp.*\", sensor=\"temp1\"})", "legendFormat": "{{instance}}", "refId": "A", "instant": true }]
+          "title": "CPU Temperature", "type": "bargauge",
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (nodename) (node_hwmon_temp_celsius{chip=~\".*coretemp.*\", sensor=\"temp1\"} * on(instance) group_left(nodename) node_uname_info)", "legendFormat": "{{nodename}}", "refId": "A", "instant": true }]
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never" }, "unit": "celsius" }, "overrides": [] },
-          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 }, "id": 41,
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 }, "id": 41,
           "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-          "title": "Temperature History (requires node_exporter)", "type": "timeseries",
-          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "node_hwmon_temp_celsius{chip=~\".*coretemp.*\"}", "legendFormat": "{{instance}} {{sensor}}", "refId": "A" }]
+          "title": "Temperature History", "type": "timeseries",
+          "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (nodename, sensor) (node_hwmon_temp_celsius{chip=~\".*coretemp.*\"} * on(instance) group_left(nodename) node_uname_info)", "legendFormat": "{{nodename}} {{sensor}}", "refId": "A" }]
         }
       ],
       "title": "Temperature (node_exporter)", "type": "row"
     },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 }, "id": 205, "title": "Virtual Machines", "type": "row" },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 }, "id": 205, "title": "Virtual Machines", "type": "row" },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": {
@@ -146,7 +134,7 @@
           { "matcher": { "id": "byName", "options": "RAM Used" }, "properties": [{ "id": "unit", "value": "bytes" }] }
         ]
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 50 }, "id": 50,
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 41 }, "id": 50,
       "options": { "showHeader": true },
       "title": "VM Status", "type": "table",
       "targets": [
