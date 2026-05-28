@@ -11,16 +11,15 @@
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "options": { "0": { "color": "red", "index": 1, "text": "DOWN" }, "1": { "color": "green", "index": 0, "text": "UP" } }, "type": "value" }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
-      "gridPos": { "h": 4, "w": 2, "x": 0, "y": 1 }, "id": 1,
-      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
-      "repeat": "node", "repeatDirection": "h", "maxPerRow": 12,
-      "title": "$node", "type": "stat",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(pve_up{id=~\"node/.*\", node=~\"$node\"})", "legendFormat": "{{node}}", "refId": "A" }]
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 }, "id": 1,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
+      "title": "Node Status", "type": "stat",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (pve_up{id=~\"node/.*\", node=~\"$node\"})", "legendFormat": "{{node}}", "refId": "A", "instant": true, "range": false }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }, "unit": "short" }, "overrides": [] },
-      "gridPos": { "h": 4, "w": 3, "x": 7, "y": 1 }, "id": 2,
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 }, "id": 2,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Total VMs", "type": "stat",
       "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "count(max by (id) (pve_guest_info{type=\"qemu\", node=~\"$node\"}))", "legendFormat": "VMs", "refId": "A" }]
@@ -28,7 +27,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }, "unit": "short" }, "overrides": [] },
-      "gridPos": { "h": 4, "w": 3, "x": 10, "y": 1 }, "id": 3,
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 }, "id": 3,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Running VMs", "type": "stat",
       "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "count(max by (id) (pve_up{id=~\"qemu/.*\", node=~\"$node\"} == 1))", "legendFormat": "Running", "refId": "A" }]
@@ -36,7 +35,7 @@
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }, "unit": "short" }, "overrides": [] },
-      "gridPos": { "h": 4, "w": 3, "x": 13, "y": 1 }, "id": 4,
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 }, "id": 4,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Containers (LXC)", "type": "stat",
       "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "count(max by (id) (pve_guest_info{type=\"lxc\", node=~\"$node\"}))", "legendFormat": "LXC", "refId": "A" }]
