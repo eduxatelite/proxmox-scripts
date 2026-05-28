@@ -457,42 +457,7 @@ fi
 echo -e "${BOLD}${CYAN}  ── Useful Commands ─────────────────────────────────────${NC}"
 echo -e "  View logs:    ${BOLD}docker compose logs -f${NC}"
 echo -e "  Stop stack:   ${BOLD}docker compose down${NC}"
-echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
-echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
-
-echo -e "${BOLD}${GREEN}  Happy monitoring! 📊${NC}\n"
-
-  if [[ "$INSTALL_NODE_EXPORTER" == true ]]; then
-    echo -e "  ${BOLD}node_exporter setup (run on each Proxmox node as root):${NC}\n"
-    for NODE_ENTRY in "${PROXMOX_NODES[@]}"; do
-      IFS='|' read -r ALIAS HOST PORT USER PASS VERIFY <<< "$NODE_ENTRY"
-      echo -e "  ${CYAN}Node: ${ALIAS} (${HOST})${NC}"
-      echo -e '    wget https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-*linux-amd64.tar.gz \'
-      echo -e '      -O /tmp/node_exporter.tar.gz'
-      echo -e '    tar -xzf /tmp/node_exporter.tar.gz -C /tmp'
-      echo -e '    mv /tmp/node_exporter-*/node_exporter /usr/local/bin/'
-      echo -e '    useradd -rs /bin/false node_exporter 2>/dev/null || true'
-      echo -e '    cat > /etc/systemd/system/node_exporter.service << EOF'
-      echo -e '    [Unit]'
-      echo -e '    Description=Prometheus Node Exporter'
-      echo -e '    After=network.target'
-      echo -e '    [Service]'
-      echo -e '    User=node_exporter'
-      echo -e '    ExecStart=/usr/local/bin/node_exporter'
-      echo -e '    Restart=on-failure'
-      echo -e '    [Install]'
-      echo -e '    WantedBy=multi-user.target'
-      echo -e '    EOF'
-      echo -e '    systemctl daemon-reload && systemctl enable --now node_exporter'
-      echo -e "    # Verify: curl http://${HOST}:9100/metrics\n"
-    done
-  fi
-fi
-
-echo -e "${BOLD}${CYAN}  ── Useful Commands ─────────────────────────────────────${NC}"
-echo -e "  View logs:    ${BOLD}docker compose logs -f${NC}"
-echo -e "  Stop stack:   ${BOLD}docker compose down${NC}"
-echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
-echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
+  echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
+  echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
 
 echo -e "${BOLD}${GREEN}  Happy monitoring! 📊${NC}\n"
