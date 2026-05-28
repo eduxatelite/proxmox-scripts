@@ -14,7 +14,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 }, "id": 1,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "textMode": "value_and_name" },
       "title": "Node Status", "type": "stat",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (pve_up{id=~\"node/.*\", node=~\"$node\"})", "legendFormat": "{{node}}", "refId": "A", "instant": true }]
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (pve_up{id=~\"node/.*\", node=~\"$node\"})", "legendFormat": "{{node}}", "refId": "A" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
