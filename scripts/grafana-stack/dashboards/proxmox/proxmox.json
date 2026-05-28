@@ -178,7 +178,7 @@
   "time": { "from": "now-3h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Proxmox Cluster",
-  "uid": "proxmox-cluster",
+  "title": "Proxmox VE",
+  "uid": "proxmox-dashboard",
   "version": 1
 }
