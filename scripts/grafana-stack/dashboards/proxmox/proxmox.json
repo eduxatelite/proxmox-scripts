@@ -12,7 +12,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "options": { "0": { "color": "red", "index": 1, "text": "DOWN" }, "1": { "color": "green", "index": 0, "text": "UP" } }, "type": "value" }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 }, "id": 1,
-      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "textMode": "value_and_name" },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value_and_name" },
       "title": "Node Status", "type": "stat",
       "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (node) (pve_up{id=~\"node/.*\", node=~\"$node\"})", "legendFormat": "{{node}}", "refId": "A" }]
     },
