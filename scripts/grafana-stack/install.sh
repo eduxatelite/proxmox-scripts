@@ -428,28 +428,37 @@ if [[ "$INSTALL_PROXMOX" == true ]]; then
   echo -e "  Metrics will appear in Grafana within the next scrape cycle (~15s).\n"
 
   if [[ "$INSTALL_NODE_EXPORTER" == true ]]; then
-    echo -e "  ${BOLD}node_exporter setup (run on each Proxmox node as root):${NC}\n"
+    NODE_EXPORTER_VERSION="1.11.1"
+    echo -e "  ${BOLD}node_exporter setup — run these commands on each Proxmox node as root:${NC}\n"
     for NODE_ENTRY in "${PROXMOX_NODES[@]}"; do
       IFS='|' read -r ALIAS HOST PORT USER PASS VERIFY <<< "$NODE_ENTRY"
-      echo -e "  ${CYAN}Node: ${ALIAS} (${HOST})${NC}"
-      echo -e '    wget https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-*linux-amd64.tar.gz \\'
-      echo -e '      -O /tmp/node_exporter.tar.gz'
-      echo -e '    tar -xzf /tmp/node_exporter.tar.gz -C /tmp'
-      echo -e '    mv /tmp/node_exporter-*/node_exporter /usr/local/bin/'
-      echo -e '    useradd -rs /bin/false node_exporter 2>/dev/null || true'
-      echo -e '    cat > /etc/systemd/system/node_exporter.service << EOF'
-      echo -e '    [Unit]'
-      echo -e '    Description=Prometheus Node Exporter'
-      echo -e '    After=network.target'
-      echo -e '    [Service]'
-      echo -e '    User=node_exporter'
-      echo -e '    ExecStart=/usr/local/bin/node_exporter'
-      echo -e '    Restart=on-failure'
-      echo -e '    [Install]'
-      echo -e '    WantedBy=multi-user.target'
-      echo -e '    EOF'
-      echo -e '    systemctl daemon-reload && systemctl enable --now node_exporter'
-      echo -e "    # Verify: curl http://${HOST}:9100/metrics\n"
+      echo -e "  ${CYAN}━━━ Node: ${ALIAS} (${HOST}) ━━━${NC}"
+      echo -e ""
+      echo -e "  ${BOLD}# 1. Download and install binary${NC}"
+      echo -e "  wget \"https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz\" -O /tmp/node_exporter.tar.gz"
+      echo -e ""
+      echo -e "  ${BOLD}# 2. Extract and move binary${NC}"
+      echo -e "  tar -xzf /tmp/node_exporter.tar.gz -C /tmp && mv /tmp/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin/ && useradd -rs /bin/false node_exporter 2>/dev/null || true"
+      echo -e ""
+      echo -e "  ${BOLD}# 3. Create systemd service${NC}"
+      echo -e "  cat > /etc/systemd/system/node_exporter.service << 'EOF'"
+      echo -e "  [Unit]"
+      echo -e "  Description=Prometheus Node Exporter"
+      echo -e "  After=network.target"
+      echo -e "  [Service]"
+      echo -e "  User=node_exporter"
+      echo -e "  ExecStart=/usr/local/bin/node_exporter"
+      echo -e "  Restart=on-failure"
+      echo -e "  [Install]"
+      echo -e "  WantedBy=multi-user.target"
+      echo -e "  EOF"
+      echo -e ""
+      echo -e "  ${BOLD}# 4. Enable and start${NC}"
+      echo -e "  systemctl daemon-reload && systemctl enable --now node_exporter"
+      echo -e ""
+      echo -e "  ${BOLD}# 5. Verify${NC}"
+      echo -e "  curl http://localhost:9100/metrics | head -5"
+      echo -e ""
     done
   fi
 fi
@@ -457,7 +466,7 @@ fi
 echo -e "${BOLD}${CYAN}  ── Useful Commands ─────────────────────────────────────${NC}"
 echo -e "  View logs:    ${BOLD}docker compose logs -f${NC}"
 echo -e "  Stop stack:   ${BOLD}docker compose down${NC}"
-  echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
-  echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
+echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
+echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
 
 echo -e "${BOLD}${GREEN}  Happy monitoring! 📊${NC}\n"
