@@ -68,12 +68,31 @@ INSTALL_FORTIGATE=false
 INSTALL_PROXMOX=false
 INSTALL_NODE_EXPORTER=false
 PROXMOX_NODES=()   # "alias|host|port|user|password|verify_ssl"
-# When run via bash <(curl ...), BASH_SOURCE[0] is /dev/fd/XX — create install dir
+REPO_RAW="https://raw.githubusercontent.com/eduxatelite/proxmox-scripts/main/scripts/grafana-stack"
+
+# When run via bash <(curl ...), BASH_SOURCE[0] is /dev/fd/XX — create install dir and download files
 if [[ "${BASH_SOURCE[0]}" == "/dev/fd/"* ]] || [[ "${BASH_SOURCE[0]}" == "bash" ]]; then
   INSTALL_DIR="/opt/grafana-stack"
   mkdir -p "$INSTALL_DIR"
   cd "$INSTALL_DIR"
   SCRIPT_DIR="$INSTALL_DIR"
+
+  info "Downloading project files from GitHub..."
+  # Config files
+  mkdir -p config/prometheus config/loki config/promtail \
+           config/grafana/provisioning/datasources \
+           config/grafana/provisioning/dashboards \
+           dashboards/fortigate dashboards/proxmox
+
+  curl -fsSL "$REPO_RAW/docker-compose.yml"                                              -o docker-compose.yml
+  curl -fsSL "$REPO_RAW/config/prometheus/prometheus.yml"                                -o config/prometheus/prometheus.yml
+  curl -fsSL "$REPO_RAW/config/loki/loki-config.yml"                                    -o config/loki/loki-config.yml
+  curl -fsSL "$REPO_RAW/config/promtail/promtail-config.yml"                             -o config/promtail/promtail-config.yml
+  curl -fsSL "$REPO_RAW/config/grafana/provisioning/datasources/datasources.yml"         -o config/grafana/provisioning/datasources/datasources.yml
+  curl -fsSL "$REPO_RAW/config/grafana/provisioning/dashboards/dashboards.yml"           -o config/grafana/provisioning/dashboards/dashboards.yml
+  curl -fsSL "$REPO_RAW/dashboards/fortigate/fortigate.json"                             -o dashboards/fortigate/fortigate.json
+  curl -fsSL "$REPO_RAW/dashboards/proxmox/proxmox.json"                                 -o dashboards/proxmox/proxmox.json
+  log "Files downloaded."
 else
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
@@ -301,9 +320,9 @@ if [[ "$INSTALL_PROXMOX" == true ]] && [[ ${#PROXMOX_NODES[@]} -gt 0 ]]; then
     fi
   done
 
-  # Replace placeholder in prometheus.yml
-  sed -i "s|  # PROXMOX_SCRAPE_CONFIGS|${PROXMOX_SCRAPE_BLOCK}|" \
-    "${SCRIPT_DIR}/config/prometheus/prometheus.yml"
+  # Remove placeholder line and append scrape configs (sed can't handle multiline)
+  sed -i '/# PROXMOX_SCRAPE_CONFIGS/d' "${SCRIPT_DIR}/config/prometheus/prometheus.yml"
+  printf '%s\n' "$PROXMOX_SCRAPE_BLOCK" >> "${SCRIPT_DIR}/config/prometheus/prometheus.yml"
   log "Prometheus config updated with Proxmox nodes."
 fi
 
@@ -414,6 +433,41 @@ if [[ "$INSTALL_PROXMOX" == true ]]; then
       IFS='|' read -r ALIAS HOST PORT USER PASS VERIFY <<< "$NODE_ENTRY"
       echo -e "  ${CYAN}Node: ${ALIAS} (${HOST})${NC}"
       echo -e '    wget https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-*linux-amd64.tar.gz \\'
+      echo -e '      -O /tmp/node_exporter.tar.gz'
+      echo -e '    tar -xzf /tmp/node_exporter.tar.gz -C /tmp'
+      echo -e '    mv /tmp/node_exporter-*/node_exporter /usr/local/bin/'
+      echo -e '    useradd -rs /bin/false node_exporter 2>/dev/null || true'
+      echo -e '    cat > /etc/systemd/system/node_exporter.service << EOF'
+      echo -e '    [Unit]'
+      echo -e '    Description=Prometheus Node Exporter'
+      echo -e '    After=network.target'
+      echo -e '    [Service]'
+      echo -e '    User=node_exporter'
+      echo -e '    ExecStart=/usr/local/bin/node_exporter'
+      echo -e '    Restart=on-failure'
+      echo -e '    [Install]'
+      echo -e '    WantedBy=multi-user.target'
+      echo -e '    EOF'
+      echo -e '    systemctl daemon-reload && systemctl enable --now node_exporter'
+      echo -e "    # Verify: curl http://${HOST}:9100/metrics\n"
+    done
+  fi
+fi
+
+echo -e "${BOLD}${CYAN}  ── Useful Commands ─────────────────────────────────────${NC}"
+echo -e "  View logs:    ${BOLD}docker compose logs -f${NC}"
+echo -e "  Stop stack:   ${BOLD}docker compose down${NC}"
+echo -e "  Restart:      ${BOLD}docker compose restart${NC}"
+echo -e "  Update:       ${BOLD}docker compose pull && docker compose up -d${NC}\n"
+
+echo -e "${BOLD}${GREEN}  Happy monitoring! 📊${NC}\n"
+
+  if [[ "$INSTALL_NODE_EXPORTER" == true ]]; then
+    echo -e "  ${BOLD}node_exporter setup (run on each Proxmox node as root):${NC}\n"
+    for NODE_ENTRY in "${PROXMOX_NODES[@]}"; do
+      IFS='|' read -r ALIAS HOST PORT USER PASS VERIFY <<< "$NODE_ENTRY"
+      echo -e "  ${CYAN}Node: ${ALIAS} (${HOST})${NC}"
+      echo -e '    wget https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-*linux-amd64.tar.gz \'
       echo -e '      -O /tmp/node_exporter.tar.gz'
       echo -e '    tar -xzf /tmp/node_exporter.tar.gz -C /tmp'
       echo -e '    mv /tmp/node_exporter-*/node_exporter /usr/local/bin/'
