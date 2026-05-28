@@ -95,7 +95,7 @@
     { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "id": 202, "title": "Storage", "type": "row" },
     {
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }, "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.7 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
       "gridPos": { "h": 12, "w": 12, "x": 0, "y": 15 }, "id": 30,
       "options": { "displayMode": "gradient", "minVizWidth": 0, "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showUnfilled": true, "valueMode": "color" },
       "title": "Storage Usage by Pool", "type": "bargauge",
@@ -139,7 +139,7 @@
       "gridPos": { "h": 8, "w": 16, "x": 8, "y": 28 }, "id": 41,
       "options": { "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "title": "Temperature over Time", "type": "timeseries",
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (nodename, sensor) (node_hwmon_temp_celsius{chip=~\".*coretemp.*\"} * on(instance) group_left(nodename) node_uname_info)", "legendFormat": "{{nodename}} {{sensor}}", "refId": "A" }]
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max by (nodename) (node_hwmon_temp_celsius{chip=~\".*coretemp.*\"} * on(instance) group_left(nodename) node_uname_info)", "legendFormat": "{{nodename}}", "refId": "A" }]
     },
     { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 }, "id": 204, "title": "Virtual Machines", "type": "row" },
     {
