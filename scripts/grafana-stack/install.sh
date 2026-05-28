@@ -68,7 +68,15 @@ INSTALL_FORTIGATE=false
 INSTALL_PROXMOX=false
 INSTALL_NODE_EXPORTER=false
 PROXMOX_NODES=()   # "alias|host|port|user|password|verify_ssl"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When run via bash <(curl ...), BASH_SOURCE[0] is /dev/fd/XX — create install dir
+if [[ "${BASH_SOURCE[0]}" == "/dev/fd/"* ]] || [[ "${BASH_SOURCE[0]}" == "bash" ]]; then
+  INSTALL_DIR="/opt/grafana-stack"
+  mkdir -p "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
+  SCRIPT_DIR="$INSTALL_DIR"
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 # ─── Banner ──────────────────────────────────────────────────────────────────
 clear
