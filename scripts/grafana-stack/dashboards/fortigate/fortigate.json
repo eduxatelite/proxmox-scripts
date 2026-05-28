@@ -28,7 +28,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "id": 1,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Total Events (1h)",
+      "title": "Total Events",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\"}[$__range]))", "legendFormat": "Events", "refId": "A" }]
     },
@@ -41,7 +41,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
       "id": 2,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Blocked/Denied (1h)",
+      "title": "Blocked/Denied",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", action=\"deny\"}[$__range]))", "legendFormat": "Denied", "refId": "A" }]
     },
@@ -54,7 +54,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
       "id": 3,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Warnings (1h)",
+      "title": "Warnings",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", level=~\"warning|error\"}[$__range]))", "legendFormat": "Warnings", "refId": "A" }]
     },
@@ -67,7 +67,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
       "id": 4,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "Errors (1h)",
+      "title": "Errors",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", level=\"error\"}[$__range]))", "legendFormat": "Errors", "refId": "A" }]
     },
@@ -80,7 +80,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
       "id": 5,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "IPS Events (1h)",
+      "title": "IPS Events",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", type=\"utm\", subtype=\"ips\"}[$__range]))", "legendFormat": "IPS", "refId": "A" }]
     },
@@ -93,7 +93,7 @@
       "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
       "id": 6,
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "title": "UTM Events (1h)",
+      "title": "UTM Events",
       "type": "stat",
       "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", type=\"utm\"}[$__range]))", "legendFormat": "UTM", "refId": "A" }]
     },
