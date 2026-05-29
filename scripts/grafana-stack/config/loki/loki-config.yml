@@ -41,7 +41,7 @@ limits_config:
   ingestion_rate_mb: 16
   ingestion_burst_size_mb: 32
   query_timeout: 300s
-  max_query_length: 0
+  max_query_length: 8760h
 
 compactor:
   retention_enabled: true
