@@ -17,6 +17,8 @@ common:
       store: inmemory
 
 query_range:
+  split_queries_by_interval: 1h
+  parallelise_shardable_queries: true
   results_cache:
     cache:
       embedded_cache:
@@ -40,6 +42,8 @@ limits_config:
   retention_period: 8760h  # 365 days (1 year)
   ingestion_rate_mb: 16
   ingestion_burst_size_mb: 32
+  query_timeout: 300s
+  max_query_length: 0
 
 compactor:
   retention_enabled: true

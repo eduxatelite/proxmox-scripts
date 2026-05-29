@@ -30,7 +30,7 @@
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "title": "Total Events",
       "type": "stat",
-      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\"}[$__range]))", "legendFormat": "Events", "refId": "A" }]
+      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum(count_over_time({job=\"fortigate\", type=~\".+\"}[$__range]))", "legendFormat": "Events", "refId": "A" }]
     },
     {
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
@@ -128,7 +128,7 @@
       "options": { "displayLabels": ["name", "percent"], "legend": { "displayMode": "list", "placement": "right", "showLegend": true }, "pieType": "pie", "tooltip": { "mode": "single", "sort": "none" } },
       "title": "Traffic by Log Type",
       "type": "piechart",
-      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum by (type) (count_over_time({job=\"fortigate\"}[$__range]))", "legendFormat": "{{type}}", "refId": "A" }]
+      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum by (type) (count_over_time({job=\"fortigate\", type=~\".+\"}[$__range]))", "legendFormat": "{{type}}", "refId": "A" }]
     },
     {
       "collapsed": false,
@@ -161,7 +161,7 @@
       "options": { "displayLabels": ["name", "percent"], "legend": { "displayMode": "list", "placement": "right", "showLegend": true }, "pieType": "pie", "tooltip": { "mode": "single", "sort": "none" } },
       "title": "Events by Level (distribution)",
       "type": "piechart",
-      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum by (level) (count_over_time({job=\"fortigate\"}[$__range]))", "legendFormat": "{{level}}", "refId": "A" }]
+      "targets": [{ "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "expr": "sum by (level) (count_over_time({job=\"fortigate\", level=~\".+\"}[$__range]))", "legendFormat": "{{level}}", "refId": "A" }]
     },
     {
       "collapsed": false,
