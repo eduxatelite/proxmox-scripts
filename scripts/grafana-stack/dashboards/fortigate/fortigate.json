@@ -608,6 +608,197 @@
         "x": 0,
         "y": 11
       },
+      "id": 120,
+      "title": "🌐 SD-WAN — SLA / Health Check",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 12
+      },
+      "id": 70,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "title": "Salidas de SLA (out-of-sla)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(count_over_time({job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"out-of-sla\" [$__range])) or vector(0)",
+          "legendFormat": "Out-of-SLA",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 12
+      },
+      "id": 71,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "title": "Salidas de SLA por Health Check (enlace)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum by (healthcheck) (count_over_time({job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"out-of-sla\" | logfmt [5m]))",
+          "legendFormat": "{{healthcheck}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 72,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "title": "Histórico de cambios de estado SD-WAN",
+      "type": "logs",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "{job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"status changed\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
       "id": 101,
       "title": "Traffic",
       "type": "row"
@@ -661,7 +852,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 31
       },
       "id": 10,
       "options": {
@@ -719,7 +910,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 31
       },
       "id": 11,
       "options": {
@@ -758,7 +949,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 39
       },
       "id": 102,
       "title": "Security Events",
@@ -813,7 +1004,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 21
+        "y": 40
       },
       "id": 20,
       "options": {
@@ -870,7 +1061,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 21
+        "y": 40
       },
       "id": 21,
       "options": {
@@ -909,7 +1100,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 48
       },
       "id": 105,
       "title": "UTM (Web Filter & App Control)",
@@ -964,7 +1155,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 49
       },
       "id": 50,
       "options": {
@@ -1021,7 +1212,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 49
       },
       "id": 51,
       "options": {
@@ -1063,7 +1254,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 57
       },
       "id": 52,
       "options": {
@@ -1099,7 +1290,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 38
+        "y": 57
       },
       "id": 53,
       "options": {
@@ -1132,7 +1323,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 67
       },
       "id": 104,
       "title": "Intrusion Prevention (IPS)",
@@ -1187,7 +1378,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 68
       },
       "id": 40,
       "options": {
@@ -1244,7 +1435,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 68
       },
       "id": 41,
       "options": {
@@ -1286,7 +1477,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 76
       },
       "id": 42,
       "options": {
@@ -1308,197 +1499,6 @@
             "uid": "${DS_LOKI}"
           },
           "expr": "{job=\"fortigate\", type=\"utm\", subtype=\"ips\"}",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 67
-      },
-      "id": 120,
-      "title": "🌐 SD-WAN — SLA / Health Check",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 68
-      },
-      "id": 70,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "title": "Salidas de SLA (out-of-sla)",
-      "type": "stat",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "expr": "sum(count_over_time({job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"out-of-sla\" [$__range]))",
-          "legendFormat": "Out-of-SLA",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 18,
-        "x": 6,
-        "y": 68
-      },
-      "id": 71,
-      "options": {
-        "legend": {
-          "calcs": [
-            "sum"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "title": "Salidas de SLA por Health Check (enlace)",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "expr": "sum by (healthcheck) (count_over_time({job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"out-of-sla\" | logfmt [5m]))",
-          "legendFormat": "{{healthcheck}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 76
-      },
-      "id": 72,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": true
-      },
-      "title": "Histórico de cambios de estado SD-WAN",
-      "type": "logs",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${DS_LOKI}"
-          },
-          "expr": "{job=\"fortigate\"} |= \"subtype=\\\"sdwan\\\"\" |= \"status changed\"",
           "legendFormat": "",
           "refId": "A"
         }
