@@ -17,8 +17,6 @@ common:
       store: inmemory
 
 query_range:
-  split_queries_by_interval: 1h
-  parallelise_shardable_queries: true
   results_cache:
     cache:
       embedded_cache:
