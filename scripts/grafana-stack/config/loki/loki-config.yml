@@ -42,6 +42,8 @@ limits_config:
   ingestion_burst_size_mb: 32
   query_timeout: 300s
   max_query_length: 8760h
+  max_streams_per_user: 100000
+  max_global_streams_per_user: 100000
 
 compactor:
   retention_enabled: true

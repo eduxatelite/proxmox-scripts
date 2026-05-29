@@ -20,24 +20,42 @@ scrape_configs:
           host: monitoring-server
           __path__: /var/log/*.log
 
-  # ─── FortiGate logs (written by rsyslog on host) ─────────────────────────
-  - job_name: fortigate
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: fortigate
-          __path__: /var/log/fortigate/fortigate.log
+  # ─── FortiGate syslog UDP 1514 ────────────────────────────────────────────
+  - job_name: fortigate_udp
+    syslog:
+      listen_address: 0.0.0.0:1514
+      listen_protocol: udp
+      idle_timeout: 60s
+      label_structured_data: yes
+      labels:
+        job: fortigate
+    relabel_configs:
+      - source_labels: [__syslog_message_hostname]
+        target_label: host
     pipeline_stages:
-      # Extract FortiGate key=value fields as labels
       - regex:
-          expression: '.*type="(?P<type>[^"]*)".*'
+          expression: '.*type="(?P<type>[^"]*)".*subtype="(?P<subtype>[^"]*)".*level="(?P<level>[^"]*)".*action="(?P<action>[^"]*)".*'
+      - labels:
+          type:
+          subtype:
+          level:
+          action:
+
+  # ─── FortiGate syslog TCP 1515 ────────────────────────────────────────────
+  - job_name: fortigate_tcp
+    syslog:
+      listen_address: 0.0.0.0:1515
+      listen_protocol: tcp
+      idle_timeout: 60s
+      label_structured_data: yes
+      labels:
+        job: fortigate
+    relabel_configs:
+      - source_labels: [__syslog_message_hostname]
+        target_label: host
+    pipeline_stages:
       - regex:
-          expression: '.*subtype="(?P<subtype>[^"]*)".*'
-      - regex:
-          expression: '.*level="(?P<level>[^"]*)".*'
-      - regex:
-          expression: '.*action="(?P<action>[^"]*)".*'
+          expression: '.*type="(?P<type>[^"]*)".*subtype="(?P<subtype>[^"]*)".*level="(?P<level>[^"]*)".*action="(?P<action>[^"]*)".*'
       - labels:
           type:
           subtype:
