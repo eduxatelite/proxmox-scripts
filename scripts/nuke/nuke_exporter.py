@@ -305,6 +305,36 @@ def scrape_rlm() -> str:
                     f'product="{u["product"]}",version="{u["version"]}"}} {u["handles"]}'
                 )
 
+        # ── per-user tier classification (deduped view) ────────────────────────
+        # A Studio user also holds nukex_i and nuke_i handles; a NukeX user also
+        # holds nuke_i. For the dashboard tables we classify each user@host into
+        # their HIGHEST tier only, so nobody shows up in multiple tables.
+        if usage:
+            userhost_products: dict = defaultdict(lambda: defaultdict(int))
+            for u in usage:
+                userhost_products[(u["user"], u["host"])][u["product"]] += u["handles"]
+
+            lines += ["# HELP rlm_user_tier_handles Active handles per user/host, classified into their highest tier only",
+                      "# TYPE rlm_user_tier_handles gauge"]
+            for (user, host), prods in userhost_products.items():
+                if PROD_STUDIO in prods:
+                    tier, handles = "nuke_studio", prods[PROD_STUDIO]
+                elif PROD_NUKEX in prods:
+                    tier, handles = "nukex", prods[PROD_NUKEX]
+                elif PROD_NUKE in prods:
+                    tier, handles = "nuke", prods[PROD_NUKE]
+                else:
+                    tier = None
+                if tier:
+                    lines.append(
+                        f'rlm_user_tier_handles{{user="{user}",host="{host}",tier="{tier}"}} {handles}'
+                    )
+                # Render runs independently of the interactive chain
+                if PROD_RENDER in prods:
+                    lines.append(
+                        f'rlm_user_tier_handles{{user="{user}",host="{host}",tier="nuke_render"}} {prods[PROD_RENDER]}'
+                    )
+
         # ── unique active users per product ────────────────────────────────────
         users_per_product: dict = defaultdict(set)
         for u in usage:

@@ -217,7 +217,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rlm_user_active_handles{product=\"nuke_i\"}",
+          "expr": "rlm_user_tier_handles{tier=\"nuke\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "{{user}}@{{host}}",
@@ -1142,7 +1142,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_user_active_handles{product=\"nukex_i\"}",
+          "expr": "rlm_user_tier_handles{tier=\"nukex\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "{{user}}@{{host}}",
@@ -1326,7 +1326,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_user_active_handles{product=\"nuke_r\"}",
+          "expr": "rlm_user_tier_handles{tier=\"nuke_render\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "{{user}}@{{host}}",
@@ -1561,7 +1561,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rlm_user_active_handles{product=\"nukestudio_i\"}",
+          "expr": "rlm_user_tier_handles{tier=\"nuke_studio\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "{{user}}@{{host}}",
