@@ -156,50 +156,57 @@ def parse_isv_stats(text: str) -> dict:
 def compute_tier_metrics(agg_total: dict, agg_used: dict) -> list[dict]:
     """
     Foundry's license chain:
-        Nuke Studio  →  consumes 1 nuke_studio + 1 nukex_i + 1 nuke_i
-        NukeX        →  consumes                 1 nukex_i + 1 nuke_i
-        Nuke         →  consumes                             1 nuke_i
-    So `nuke_i_used` reports Nuke + NukeX + Studio users bundled together,
-    `nukex_i_used` reports NukeX + Studio bundled, etc.
+        Nuke Studio  →  consumes 1 nukestudio_i + 1 nukex_i + 1 nuke_i
+        NukeX        →  consumes                  1 nukex_i + 1 nuke_i
+        Nuke         →  consumes                              1 nuke_i
+    RLM reports pools with the bundled licenses baked in, so raw numbers
+    overstate what was actually purchased per tier. E.g. with 1 Studio,
+    3 real NukeX and 9 real Nuke seats, RLM shows nuke_i=13, nukex_i=4,
+    nukestudio_i=1.
 
-    This function derives the *real* per-tier picture a supervisor cares
-    about — how many actual Nuke / NukeX / Studio sessions are running —
-    with all three numbers (in_use / total / free) mathematically
-    consistent so `in_use + free == total` in every panel.
+    This derives the *real* per-tier allocation:
 
-    Formulas:
-      pure_in_use(tier)     = product_used(tier) - product_used(next_higher_tier)
-      effective_free(tier)  = min(pool.total - pool.used) across all pools the tier requires
-      effective_total(tier) = pure_in_use + effective_free
+      total(studio) = pool_total(nukestudio_i)
+      total(nukex)  = pool_total(nukex_i) - pool_total(nukestudio_i)
+      total(nuke)   = pool_total(nuke_i)  - pool_total(nukex_i)
+                      (the nukex_i pool already includes Studio's bundle,
+                       so subtracting it removes NukeX + Studio in one go)
+
+      in_use(tier)  = pool_used(tier) - pool_used(next_higher_tier)
+                      (a user showing in both nuke_i and nukex_i is a NukeX
+                       user; showing in all three is a Studio user)
+
+      free(tier)    = total(tier) - in_use(tier), clamped at 0
     """
     def used(prod):  return agg_used.get(prod, 0)
     def total(prod): return agg_total.get(prod, 0)
-    def free(prod):  return max(0, total(prod) - used(prod))
 
-    # Interactive tier chain — order: nuke → nukex → nuke_studio
-    chain = [
-        # (tier_name, product, next_higher_product, required_pools)
-        ("nuke",        PROD_NUKE,   PROD_NUKEX,   [PROD_NUKE]),
-        ("nukex",       PROD_NUKEX,  PROD_STUDIO,  [PROD_NUKE, PROD_NUKEX]),
-        ("nuke_studio", PROD_STUDIO, None,         [PROD_NUKE, PROD_NUKEX, PROD_STUDIO]),
+    studio_total = total(PROD_STUDIO)
+    nukex_total  = max(0, total(PROD_NUKEX) - studio_total)
+    nuke_total   = max(0, total(PROD_NUKE)  - total(PROD_NUKEX))
+
+    studio_used  = used(PROD_STUDIO)
+    nukex_used   = max(0, used(PROD_NUKEX) - studio_used)
+    nuke_used    = max(0, used(PROD_NUKE)  - used(PROD_NUKEX))
+
+    tiers = [
+        {"tier": "nuke",        "product": PROD_NUKE,
+         "in_use": nuke_used,   "total": nuke_total,
+         "free": max(0, nuke_total - nuke_used)},
+        {"tier": "nukex",       "product": PROD_NUKEX,
+         "in_use": nukex_used,  "total": nukex_total,
+         "free": max(0, nukex_total - nukex_used)},
+        {"tier": "nuke_studio", "product": PROD_STUDIO,
+         "in_use": studio_used, "total": studio_total,
+         "free": max(0, studio_total - studio_used)},
     ]
-
-    tiers = []
-    for tier_name, product, next_prod, requires in chain:
-        pure     = max(0, used(product) - (used(next_prod) if next_prod else 0))
-        eff_free = max(0, min((free(p) for p in requires), default=0))
-        eff_tot  = pure + eff_free
-        tiers.append({
-            "tier": tier_name, "product": product,
-            "in_use": pure, "total": eff_tot, "free": eff_free,
-        })
 
     # Render tier — standalone, no chain dependencies
     tiers.append({
         "tier": "nuke_render", "product": PROD_RENDER,
         "in_use": used(PROD_RENDER),
         "total":  total(PROD_RENDER),
-        "free":   free(PROD_RENDER),
+        "free":   max(0, total(PROD_RENDER) - used(PROD_RENDER)),
     })
     return tiers
 
