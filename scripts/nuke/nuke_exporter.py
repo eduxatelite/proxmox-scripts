@@ -34,6 +34,15 @@ RLMUTIL_PATH    = os.getenv("RLMUTIL_PATH",   "/app/rlmutil")
 EXPORTER_PORT   = int(os.getenv("EXPORTER_PORT",   "9200"))
 SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "60"))
 
+# ── tier chain configuration ──────────────────────────────────────────────────
+# The Foundry Nuke license chain — each higher tier ALSO consumes lower tiers'
+# licenses (opening NukeX pulls a nuke_i + a nukex_i; Studio pulls all three).
+# Product names differ slightly between studios / versions — override via env.
+PROD_NUKE       = os.getenv("PROD_NUKE",       "nuke_i")
+PROD_NUKEX      = os.getenv("PROD_NUKEX",      "nukex_i")
+PROD_STUDIO     = os.getenv("PROD_STUDIO",     "nukestudio_i")
+PROD_RENDER     = os.getenv("PROD_RENDER",     "nuke_r")
+
 # ── shared state ───────────────────────────────────────────────────────────────
 _metrics_lock = threading.Lock()
 _metrics_text = b""
@@ -142,6 +151,59 @@ def parse_isv_stats(text: str) -> dict:
     return stats
 
 
+# ── tier accounting ────────────────────────────────────────────────────────────
+
+def compute_tier_metrics(agg_total: dict, agg_used: dict) -> list[dict]:
+    """
+    Foundry's license chain:
+        Nuke Studio  →  consumes 1 nuke_studio + 1 nukex_i + 1 nuke_i
+        NukeX        →  consumes                 1 nukex_i + 1 nuke_i
+        Nuke         →  consumes                             1 nuke_i
+    So `nuke_i_used` reports Nuke + NukeX + Studio users bundled together,
+    `nukex_i_used` reports NukeX + Studio bundled, etc.
+
+    This function derives the *real* per-tier picture a supervisor cares
+    about — how many actual Nuke / NukeX / Studio sessions are running —
+    with all three numbers (in_use / total / free) mathematically
+    consistent so `in_use + free == total` in every panel.
+
+    Formulas:
+      pure_in_use(tier)     = product_used(tier) - product_used(next_higher_tier)
+      effective_free(tier)  = min(pool.total - pool.used) across all pools the tier requires
+      effective_total(tier) = pure_in_use + effective_free
+    """
+    def used(prod):  return agg_used.get(prod, 0)
+    def total(prod): return agg_total.get(prod, 0)
+    def free(prod):  return max(0, total(prod) - used(prod))
+
+    # Interactive tier chain — order: nuke → nukex → nuke_studio
+    chain = [
+        # (tier_name, product, next_higher_product, required_pools)
+        ("nuke",        PROD_NUKE,   PROD_NUKEX,   [PROD_NUKE]),
+        ("nukex",       PROD_NUKEX,  PROD_STUDIO,  [PROD_NUKE, PROD_NUKEX]),
+        ("nuke_studio", PROD_STUDIO, None,         [PROD_NUKE, PROD_NUKEX, PROD_STUDIO]),
+    ]
+
+    tiers = []
+    for tier_name, product, next_prod, requires in chain:
+        pure     = max(0, used(product) - (used(next_prod) if next_prod else 0))
+        eff_free = max(0, min((free(p) for p in requires), default=0))
+        eff_tot  = pure + eff_free
+        tiers.append({
+            "tier": tier_name, "product": product,
+            "in_use": pure, "total": eff_tot, "free": eff_free,
+        })
+
+    # Render tier — standalone, no chain dependencies
+    tiers.append({
+        "tier": "nuke_render", "product": PROD_RENDER,
+        "in_use": used(PROD_RENDER),
+        "total":  total(PROD_RENDER),
+        "free":   free(PROD_RENDER),
+    })
+    return tiers
+
+
 # ── metrics builder ────────────────────────────────────────────────────────────
 
 def scrape_rlm() -> str:
@@ -207,6 +269,24 @@ def scrape_rlm() -> str:
         for prod in agg_total:
             ratio = round(agg_used[prod] / agg_total[prod], 4) if agg_total[prod] > 0 else 0.0
             lines.append(f'rlm_product_license_usage_ratio{{product="{prod}"}} {ratio}')
+
+        # ── per-tier accounting (deduped of bundle consumption) ────────────────
+        tiers = compute_tier_metrics(agg_total, agg_used)
+
+        lines += ["# HELP rlm_tier_in_use Pure users of this tier (excludes users of higher tiers who also consume this pool)",
+                  "# TYPE rlm_tier_in_use gauge"]
+        for t in tiers:
+            lines.append(f'rlm_tier_in_use{{tier="{t["tier"]}",product="{t["product"]}"}} {t["in_use"]}')
+
+        lines += ["# HELP rlm_tier_total Effective total sessions of this tier possible right now (in_use + free)",
+                  "# TYPE rlm_tier_total gauge"]
+        for t in tiers:
+            lines.append(f'rlm_tier_total{{tier="{t["tier"]}",product="{t["product"]}"}} {t["total"]}')
+
+        lines += ["# HELP rlm_tier_free Effective free capacity for new sessions of this tier (bottleneck of all required pools)",
+                  "# TYPE rlm_tier_free gauge"]
+        for t in tiers:
+            lines.append(f'rlm_tier_free{{tier="{t["tier"]}",product="{t["product"]}"}} {t["free"]}')
 
         # ── active user handles ────────────────────────────────────────────────
         if usage:

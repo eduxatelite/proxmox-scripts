@@ -61,7 +61,7 @@
         "x": 12,
         "y": 0,
         "w": 12,
-        "h": 15
+        "h": 20
       },
       "fieldConfig": {
         "defaults": {
@@ -294,7 +294,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_used{product=\"nuke_i\"}",
+          "expr": "rlm_tier_in_use{tier=\"nuke\"}",
           "instant": true,
           "legendFormat": "In use",
           "range": false,
@@ -367,7 +367,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nuke_i\"}",
+          "expr": "rlm_tier_total{tier=\"nuke\"}",
           "instant": true,
           "legendFormat": "Total",
           "range": false,
@@ -443,7 +443,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nuke_i\"} - rlm_product_license_used{product=\"nuke_i\"}",
+          "expr": "rlm_tier_free{tier=\"nuke\"}",
           "instant": true,
           "legendFormat": "Free",
           "range": false,
@@ -552,7 +552,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_used{product=\"nuke_r\"}",
+          "expr": "rlm_tier_in_use{tier=\"nuke_render\"}",
           "instant": true,
           "legendFormat": "In use",
           "range": false,
@@ -625,7 +625,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nuke_r\"}",
+          "expr": "rlm_tier_total{tier=\"nuke_render\"}",
           "instant": true,
           "legendFormat": "Total",
           "range": false,
@@ -701,7 +701,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nuke_r\"} - rlm_product_license_used{product=\"nuke_r\"}",
+          "expr": "rlm_tier_free{tier=\"nuke_render\"}",
           "instant": true,
           "legendFormat": "Free",
           "range": false,
@@ -810,7 +810,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_used{product=\"nukex_i\"}",
+          "expr": "rlm_tier_in_use{tier=\"nukex\"}",
           "instant": true,
           "legendFormat": "In use",
           "range": false,
@@ -883,7 +883,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nukex_i\"}",
+          "expr": "rlm_tier_total{tier=\"nukex\"}",
           "instant": true,
           "legendFormat": "Total",
           "range": false,
@@ -959,7 +959,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_total{product=\"nukex_i\"} - rlm_product_license_used{product=\"nukex_i\"}",
+          "expr": "rlm_tier_free{tier=\"nukex\"}",
           "instant": true,
           "legendFormat": "Free",
           "range": false,
@@ -985,8 +985,8 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 15,
-        "w": 12,
+        "y": 20,
+        "w": 8,
         "h": 6
       },
       "fieldConfig": {
@@ -1168,9 +1168,9 @@
       "title": "Nuke_r Active users",
       "description": "",
       "gridPos": {
-        "x": 12,
-        "y": 15,
-        "w": 12,
+        "x": 8,
+        "y": 20,
+        "w": 8,
         "h": 6
       },
       "fieldConfig": {
@@ -1347,13 +1347,242 @@
       "transparent": false
     },
     {
+      "id": 30,
+      "type": "text",
+      "title": "",
+      "description": "",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 2 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "<div style='background:#00838F;padding:4px 14px;border-radius:5px;font-size:14px;font-weight:700;color:#fff;letter-spacing:1px'>🎥 nuke_studio — Nuke Studio</div>",
+        "mode": "html"
+      },
+      "targets": [],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "In use",
+      "description": "",
+      "gridPos": { "x": 0, "y": 17, "w": 4, "h": 3 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "rlm_tier_in_use{tier=\"nuke_studio\"}",
+          "instant": true,
+          "legendFormat": "In use",
+          "range": false,
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "Total",
+      "description": "",
+      "gridPos": { "x": 4, "y": 17, "w": 4, "h": 3 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#00838F", "mode": "fixed" },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 80 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "rlm_tier_total{tier=\"nuke_studio\"}",
+          "instant": true,
+          "legendFormat": "Total",
+          "range": false,
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "Free",
+      "description": "",
+      "gridPos": { "x": 8, "y": 17, "w": 4, "h": 3 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 3 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "rlm_tier_free{tier=\"nuke_studio\"}",
+          "instant": true,
+          "legendFormat": "Free",
+          "range": false,
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 34,
+      "type": "table",
+      "title": "Nuke_studio Active users",
+      "description": "",
+      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": { "type": "auto" },
+            "footer": { "reducers": [] },
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 80 }
+            ]
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "displayName", "value": "Handles" },
+              { "id": "custom.width", "value": 70 }
+            ] },
+          { "matcher": { "id": "byName", "options": "Time" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "__name__" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "instance" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "job" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "product" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "version" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "environment" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] },
+          { "matcher": { "id": "byName", "options": "service" },
+            "properties": [ { "id": "custom.hideFrom.viz", "value": true } ] }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [ { "desc": false, "displayName": "user" } ]
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "rlm_user_active_handles{product=\"nukestudio_i\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{user}}@{{host}}",
+          "range": false,
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
       "id": 14,
       "type": "stat",
       "title": "Denials today",
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 26,
         "w": 12,
         "h": 3
       },
@@ -1429,7 +1658,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 21,
+        "y": 26,
         "w": 12,
         "h": 3
       },
@@ -1517,7 +1746,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 29,
         "w": 24,
         "h": 2
       },
@@ -1550,7 +1779,7 @@
       "description": "",
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -1668,7 +1897,7 @@
       "description": "",
       "gridPos": {
         "x": 12,
-        "y": 26,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -1790,4 +2019,5 @@
   "graphTooltip": 1,
   "editable": true,
   "fiscalYearStartMonth": 0
+}
 }
