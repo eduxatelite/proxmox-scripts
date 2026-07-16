@@ -1864,7 +1864,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_used{product=\"nuke_i\"}",
+          "expr": "rlm_tier_in_use{tier=\"nuke\"}",
           "legendFormat": "In use",
           "refId": "A",
           "datasource": {
@@ -1873,7 +1873,7 @@
           }
         },
         {
-          "expr": "rlm_product_license_total{product=\"nuke_i\"}",
+          "expr": "rlm_tier_total{tier=\"nuke\"}",
           "legendFormat": "Total",
           "refId": "B",
           "datasource": {
@@ -1982,7 +1982,7 @@
       },
       "targets": [
         {
-          "expr": "rlm_product_license_used{product=\"nuke_r\"}",
+          "expr": "rlm_tier_in_use{tier=\"nuke_render\"}",
           "legendFormat": "In use",
           "refId": "A",
           "datasource": {
@@ -1991,7 +1991,7 @@
           }
         },
         {
-          "expr": "rlm_product_license_total{product=\"nuke_r\"}",
+          "expr": "rlm_tier_total{tier=\"nuke_render\"}",
           "legendFormat": "Total",
           "refId": "B",
           "datasource": {
@@ -2005,6 +2005,154 @@
         "uid": "prometheus",
         "type": "prometheus"
       },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "nukex — usage over time",
+      "description": "",
+      "gridPos": { "x": 0, "y": 39, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 80 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "annotations": { "clustering": -1, "multiLane": false },
+        "legend": {
+          "calcs": ["lastNotNull", "max", "mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "hideZeros": false, "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "rlm_tier_in_use{tier=\"nukex\"}",
+          "legendFormat": "In use",
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        },
+        {
+          "expr": "rlm_tier_total{tier=\"nukex\"}",
+          "legendFormat": "Total",
+          "refId": "B",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "links": [],
+      "transparent": false
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "nuke_studio — usage over time",
+      "description": "",
+      "gridPos": { "x": 12, "y": 39, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 80 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "annotations": { "clustering": -1, "multiLane": false },
+        "legend": {
+          "calcs": ["lastNotNull", "max", "mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "hideZeros": false, "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "expr": "rlm_tier_in_use{tier=\"nuke_studio\"}",
+          "legendFormat": "In use",
+          "refId": "A",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        },
+        {
+          "expr": "rlm_tier_total{tier=\"nuke_studio\"}",
+          "legendFormat": "Total",
+          "refId": "B",
+          "datasource": { "uid": "prometheus", "type": "prometheus" }
+        }
+      ],
+      "transformations": [],
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
       "links": [],
       "transparent": false
     }
