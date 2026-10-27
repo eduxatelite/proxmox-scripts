@@ -1,0 +1,14 @@
+services:
+  nuke-exporter:
+    build:
+      context: ./modules/nuke/build
+    image: xatelite/nuke-exporter:local
+    container_name: nuke-exporter
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: "100m", max-file: "3"}}
+    environment:
+      - RLM_HOST=${RLM_HOST:?RLM_HOST no definida}
+      - RLM_PORT=${RLM_PORT:-4101}
+      - EXPORTER_PORT=9200
+      - SCRAPE_INTERVAL=${NUKE_SCRAPE_INTERVAL:-60}
+    networks: [monitoring]

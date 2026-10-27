@@ -1,0 +1,751 @@
+{
+  "uid": "domain-controllers",
+  "title": "Domain Controllers",
+  "tags": [
+    "ad",
+    "windows",
+    "xatelite"
+  ],
+  "editable": true,
+  "schemaVersion": 39,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "dc",
+        "label": "DC",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": {
+          "query": "label_values(up{job=\"windows_dc\"}, dc_name)",
+          "refId": "v"
+        },
+        "definition": "label_values(up{job=\"windows_dc\"}, dc_name)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Estado",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "DC accesible",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"windows_dc\",dc_name=~\"$dc\"}",
+          "legendFormat": "{{dc_name}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "CAÍDO"
+                },
+                "1": {
+                  "text": "OK"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Uptime",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "time() - (windows_system_boot_time_timestamp_seconds{job=\"windows_dc\",dc_name=~\"$dc\"} or windows_system_system_up_time{job=\"windows_dc\",dc_name=~\"$dc\"})",
+          "legendFormat": "{{dc_name}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 86400
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Servicios AD parados",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "count by (dc_name) (windows_service_state{job=\"windows_dc\",dc_name=~\"$dc\",name=~\"(?i)ntds|dns|netlogon|kdc|w32time|dfsr\",state=\"running\"} == 0) or on(dc_name) (up{job=\"windows_dc\",dc_name=~\"$dc\"} * 0)",
+          "legendFormat": "{{dc_name}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      },
+      "description": "NTDS, DNS, Netlogon, KDC, W32Time y DFSR. 0 = todos corriendo."
+    },
+    {
+      "type": "stat",
+      "title": "Replicación pendiente",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "max by (dc_name) (windows_ad_replication_pending_synchronizations{job=\"windows_dc\",dc_name=~\"$dc\"})",
+          "legendFormat": "{{dc_name}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Recursos",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU %",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "100 - avg by (dc_name) (rate(windows_cpu_time_total{job=\"windows_dc\",dc_name=~\"$dc\",mode=\"idle\"}[5m])) * 100",
+          "legendFormat": "{{dc_name}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memoria %",
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - windows_memory_available_bytes{job=\"windows_dc\",dc_name=~\"$dc\"} / windows_memory_physical_total_bytes{job=\"windows_dc\",dc_name=~\"$dc\"})",
+          "legendFormat": "{{dc_name}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Disco libre %",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "100 * windows_logical_disk_free_bytes{job=\"windows_dc\",dc_name=~\"$dc\",volume!~\"HarddiskVolume.*\"} / windows_logical_disk_size_bytes{job=\"windows_dc\",dc_name=~\"$dc\",volume!~\"HarddiskVolume.*\"}",
+          "legendFormat": "{{dc_name}} {{volume}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 20
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Red (bits/s)",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (dc_name) (rate(windows_net_bytes_received_total{job=\"windows_dc\",dc_name=~\"$dc\"}[5m])) * 8",
+          "legendFormat": "{{dc_name}} rx",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "-sum by (dc_name) (rate(windows_net_bytes_sent_total{job=\"windows_dc\",dc_name=~\"$dc\"}[5m])) * 8",
+          "legendFormat": "{{dc_name}} tx",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Consultas DNS/s",
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (dc_name) (rate(windows_dns_queries_total{job=\"windows_dc\",dc_name=~\"$dc\"}[5m]))",
+          "legendFormat": "{{dc_name}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Seguridad (eventos de Windows vía Alloy)",
+      "id": 12,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Logins fallidos (4625) por DC",
+      "id": 13,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (count_over_time({job=\"windows_security\", host=~\"$dc\"} | json | event_id=`4625` [5m]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Bloqueos de cuenta (4740)",
+      "id": 14,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (count_over_time({job=\"windows_security\", host=~\"$dc\"} | json | event_id=`4740` [5m]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Top cuentas con logins fallidos (rango seleccionado)",
+      "id": 15,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (target_user, src_ip) (count_over_time({job=\"windows_security\", host=~\"$dc\"} | json | event_id=`4625` | regexp `Name='TargetUserName'>(?P<target_user>[^<]*)<` | regexp `Name='IpAddress'>(?P<src_ip>[^<]*)<` [$__range])))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ],
+            "mode": "seriesToRows"
+          }
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Cambios en grupos y cuentas (4720, 4726, 4728, 4732, 4756)",
+      "id": 16,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"windows_security\", host=~\"$dc\"} | json | event_id=~`4720|4726|4728|4732|4756`",
+          "legendFormat": "",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": false,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

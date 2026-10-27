@@ -1,0 +1,14 @@
+  # Synology DSM → Log Center → Envío de registros (TCP 1516, formato IETF)
+  - job_name: synology
+    syslog:
+      listen_address: 0.0.0.0:1516
+      listen_protocol: tcp
+      idle_timeout: 60s
+      label_structured_data: yes
+      labels:
+        job: synology
+    relabel_configs:
+      - source_labels: [__syslog_message_hostname]
+        target_label: host
+      - source_labels: [__syslog_message_app_name]
+        target_label: app

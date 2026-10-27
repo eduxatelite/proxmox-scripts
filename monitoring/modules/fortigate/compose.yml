@@ -1,0 +1,5 @@
+services:
+  promtail:
+    ports:
+      - "${SYSLOG_PORT_UDP:-1514}:1514/udp"     # syslog UDP (legado)
+      - "${SYSLOG_PORT_FORTI:-1515}:1515/tcp"   # syslog TCP RFC5424 (mode reliable) — el estándar

@@ -1,0 +1,13 @@
+services:
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:${PVE_EXPORTER_VERSION:-3.10.2}
+    container_name: pve-exporter
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: "100m", max-file: "3"}}
+    # Credenciales por variables de entorno (módulo "default"): no hay pve.yml en disco
+    environment:
+      - PVE_USER=${PVE_USER:-monitoring@pve}
+      - PVE_TOKEN_NAME=${PVE_TOKEN_NAME:-grafana}
+      - PVE_TOKEN_VALUE=${PVE_TOKEN_VALUE:?PVE_TOKEN_VALUE no definida}
+      - PVE_VERIFY_SSL=${PVE_VERIFY_SSL:-false}
+    networks: [monitoring]

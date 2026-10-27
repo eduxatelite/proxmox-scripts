@@ -1,0 +1,545 @@
+# Reglas de alerta del módulo ad
+# Umbrales parametrizables en el .env del cliente: ALERT_AD_BRUTEFORCE, ALERT_AD_LOCKOUTS, ALERT_DC_DISK_FREE_PCT
+apiVersion: 1
+groups:
+- orgId: 1
+  name: active-directory
+  folder: Alertas
+  interval: 1m
+  rules:
+  - uid: ad_dc_down
+    title: '[1] AD - Controlador de dominio caido'
+    condition: C
+    for: 5m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: up{job="windows_dc"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: DC {{ $labels.dc_name }} ({{ $labels.instance }}) no responde
+      description: Prometheus lleva 5 minutos sin poder consultar el exporter del DC. Puede ser la maquina caida, el servicio parado o un problema de red.
+  - uid: ad_ntds_down
+    title: '[2a] AD - Servicio NTDS parado'
+    condition: C
+    for: 5m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: windows_service_state{job="windows_dc",name="NTDS",state="running"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: El servicio de Active Directory esta parado en {{ $labels.dc_name }}
+      description: NTDS es el servicio principal de AD. Si esta parado, ese DC no autentica.
+  - uid: ad_replication_stuck
+    title: '[2b] AD - Replicacion atascada'
+    condition: C
+    for: 30m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: windows_ad_replication_pending_synchronizations{job="windows_dc"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $values.A.Value }} sincronizaciones pendientes en {{ $labels.dc_name }}'
+      description: Hay sincronizaciones pendientes acumulandose durante mas de 30 minutos. Los DCs pueden estar divergiendo.
+  - uid: ad_disk_low
+    title: '[3] AD - Disco del DC casi lleno'
+    condition: C
+    for: 15m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: windows_logical_disk_free_bytes{job="windows_dc",volume="C:"} / windows_logical_disk_size_bytes{job="windows_dc",volume="C:"} * 100
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - ${ALERT_DC_DISK_FREE_PCT}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Solo queda el {{ $values.A.Value | printf "%.1f" }}% libre en {{ $labels.volume }} de {{ $labels.dc_name }}
+      description: Si el disco del DC se llena, AD deja de funcionar. Revisar logs, actualizaciones y volcados.
+  - uid: ad_privileged_group
+    title: '[4] AD - Usuario anadido a grupo privilegiado'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, actor, member, target_group) (count_over_time({job="windows_security"} | json | event_id=~`4728|4732|4756` | regexp `Name='SubjectUserName'>(?P<actor>[^<]*)<` | regexp `Name='MemberName'>(?P<member>[^<]*)<` | regexp `Name='TargetUserName'>(?P<target_group>[^<]*)<` | target_group =~ `(?i)(domain admins|enterprise admins|schema admins|administrators|account operators|server operators|backup operators|print operators|group policy creator owners|dnsadmins|administradores|admins\. del dominio|admins\. de empresa)` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.actor }} ha anadido a {{ $labels.member }} al grupo {{ $labels.target_group }}'
+      description: Filtrado a grupos realmente privilegiados (Domain Admins, Enterprise Admins, Administrators y operadores). Los cambios en grupos de proyecto o distribucion ya no alertan, siguen quedando registrados en el dashboard de auditoria. Verificar si el cambio estaba autorizado.
+  - uid: ad_log_cleared
+    title: '[5] AD - Log de seguridad borrado'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, actor) (count_over_time({job="windows_security"} | json | event_id=`1102` | regexp `Name='SubjectUserName'>(?P<actor>[^<]*)<` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.actor }} ha borrado el log de seguridad de {{ $labels.host }}'
+      description: Evento 1102. Es un indicador tipico de borrado de rastro. Investigar de forma inmediata.
+  - uid: ad_bruteforce
+    title: '[6] AD - Posible fuerza bruta'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, target_user, src_ip) (count_over_time({job="windows_security"} | json | event_id=`4625` | regexp `Name='TargetUserName'>(?P<target_user>[^<]*)<` | regexp `Name='IpAddress'>(?P<src_ip>[^<]*)<` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_AD_BRUTEFORCE}
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.target_user }}: mas de ${ALERT_AD_BRUTEFORCE} logins fallidos desde {{ $labels.src_ip }} en 5 minutos'
+      description: 'Evento 4625 repetido contra la misma cuenta. Puede ser un ataque o una cuenta de servicio con la password caducada. DC: {{ $labels.host }}.'
+  - uid: ad_lockout_detail
+    title: '[7a] AD - Cuenta bloqueada'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, locked_user, caller) (count_over_time({job="windows_security"} | json | event_id=`4740` | regexp `Name='TargetUserName'>(?P<locked_user>[^<]*)<` | regexp `Name='TargetDomainName'>(?P<caller>[^<]*)<` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'La cuenta {{ $labels.locked_user }} se ha bloqueado (origen: {{ $labels.caller }})'
+      description: Evento 4740 en {{ $labels.host }}. En este evento TargetDomainName es el equipo que provoco el bloqueo, util para localizar una sesion colgada o un servicio con credenciales viejas.
+  - uid: ad_lockouts
+    title: '[7b] AD - Varias cuentas bloqueadas a la vez'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: count(sum by (locked_user) (count_over_time({job="windows_security"} | json | event_id=`4740` | regexp `Name='TargetUserName'>(?P<locked_user>[^<]*)<` [10m])))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_AD_LOCKOUTS}
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Mas de ${ALERT_AD_LOCKOUTS} cuentas distintas bloqueadas en 10 minutos
+      description: Bloqueos en masa suelen indicar un ataque de password spraying o un cambio de politica que ha pillado a mucha gente. El detalle de que cuentas son llega por la alerta 7a.
+  - uid: ad_account_changes
+    title: '[8] AD - Cuenta creada o eliminada'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, actor, target_user, event_id) (count_over_time({job="windows_security"} | json | event_id=~`4720|4726` | regexp `Name='SubjectUserName'>(?P<actor>[^<]*)<` | regexp `Name='TargetUserName'>(?P<target_user>[^<]*)<` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.actor }} ha modificado la cuenta {{ $labels.target_user }} (evento {{ $labels.event_id }})'
+      description: 4720 creacion, 4726 eliminacion. Si genera demasiado correo por el ritmo de altas y bajas de freelances, bajar severity a info para que deje de notificarse y quede solo en el dashboard.
+  - uid: ad_group_change_other
+    title: '[4b] AD - Cambio en otros grupos de seguridad'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, actor, member, target_group) (count_over_time({job="windows_security"} | json | event_id=~`4728|4732|4756` | regexp `Name='SubjectUserName'>(?P<actor>[^<]*)<` | regexp `Name='MemberName'>(?P<member>[^<]*)<` | regexp `Name='TargetUserName'>(?P<target_group>[^<]*)<` | target_group !~ `(?i)(domain admins|enterprise admins|schema admins|administrators|account operators|server operators|backup operators|print operators|group policy creator owners|dnsadmins|administradores|admins\. del dominio|admins\. de empresa)` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: info
+    annotations:
+      summary: '{{ $labels.actor }} ha anadido a {{ $labels.member }} al grupo {{ $labels.target_group }}'
+      description: 'Grupos no privilegiados (proyecto, departamento). Severidad info: no se envia por correo, queda visible en Grafana y en el dashboard de auditoria como evidencia.'
+  - uid: source_down_windows_security
+    title: '[22] Fuente sin datos - Eventos de seguridad de AD'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (job) (count_over_time({job="windows_security"} [30m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Eventos de seguridad de AD lleva 30 minutos sin enviar nada a Loki
+      description: 'Job afectado: windows_security. Si una fuente deja de mandar logs sin que nos enteremos, ese sistema queda ciego. Revisar el agente, el cron y la conectividad.'

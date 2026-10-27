@@ -1,0 +1,15 @@
+services:
+  deadline-exporter:
+    build:
+      context: ./modules/deadline/build     # rutas relativas al docker-compose.yml del core
+    image: xatelite/deadline-exporter:local
+    container_name: deadline-exporter
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: "100m", max-file: "3"}}
+    environment:
+      - DEADLINE_HOST=${DEADLINE_HOST:?DEADLINE_HOST no definida}
+      - DEADLINE_PORT=${DEADLINE_PORT:-8081}
+      - DEADLINE_APIKEY=${DEADLINE_APIKEY:-}
+      - EXPORTER_PORT=9300
+      - SCRAPE_INTERVAL=${DEADLINE_SCRAPE_INTERVAL:-30}
+    networks: [monitoring]

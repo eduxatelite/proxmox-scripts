@@ -1,0 +1,12 @@
+[Unit]
+Description=Reglas DOCKER-USER del stack de monitorizacion (Loki 3100)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/monitoring-firewall.sh /opt/grafana-stack/.env
+
+[Install]
+WantedBy=multi-user.target

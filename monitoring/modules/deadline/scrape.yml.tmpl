@@ -1,0 +1,4 @@
+scrape_configs:
+  - job_name: deadline_farm_exporter
+    static_configs:
+      - targets: ["deadline-exporter:9300"]

@@ -1,0 +1,362 @@
+# Reglas de alerta del módulo synology
+# Umbrales parametrizables en el .env del cliente: ALERT_NAS_LOGIN_FAILS, ALERT_NAS_MASS_DELETE, ALERT_NAS_VOLUME_PCT
+apiVersion: 1
+groups:
+- orgId: 1
+  name: synology
+  folder: Alertas
+  interval: 5m
+  rules:
+  - uid: syno_volume_status
+    title: '[18a] Synology - Volumen en estado degradado'
+    condition: C
+    for: 5m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: synoRaidStatus{job="snmp_synology"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: El volumen {{ $labels.raid_name }} de {{ $labels.device }} no esta en estado normal (codigo {{ $values.A.Value }})
+      description: 1 es Normal. 11 es Degrade y 12 Crashed, que son los graves. Valores entre 2 y 10 son operaciones en curso (repair, expand, sync) y no requieren accion inmediata, pero conviene mirar por que.
+  - uid: syno_volume_full
+    title: '[18b] Synology - Volumen casi lleno'
+    condition: C
+    for: 30m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: hrStorageUsed{job="snmp_synology",mountpoint="${NAS_VOLUME}"} / hrStorageSize{job="snmp_synology",mountpoint="${NAS_VOLUME}"} * 100
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_NAS_VOLUME_PCT}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: El volumen ${NAS_VOLUME} de {{ $labels.device }} esta al {{ $values.A.Value | printf "%.1f" }}%
+      description: Un volumen Btrfs lleno puede dejar el sistema de ficheros en solo lectura. Solo vigila ${NAS_VOLUME}, no las particiones del sistema.
+  - uid: syno_disk_smart
+    title: '[19] Synology - Disco con errores'
+    condition: C
+    for: 5m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: synoDiskStatus{job="snmp_synology"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 3
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.disk_id }} de {{ $labels.device }} reporta estado {{ $values.A.Value }}'
+      description: 'Umbral en mayor que 3 a proposito: 4 es SystemPartitionFailed y 5 es Crashed. El estado 3 (NotInitialized) no alerta porque hay discos sin inicializar de forma normal en este NAS.'
+  - uid: syno_login_failed
+    title: '[20] Synology - Logins fallidos al DSM'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, syno_user, src_ip) (count_over_time({job="synology"} |~ `failed to sign in` | regexp `User \[(?P<syno_user>[^\]]+)\] from \[(?P<src_ip>[^\]]+)\]` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_NAS_LOGIN_FAILS}
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.syno_user }}: 5 o mas intentos fallidos de login en el NAS desde {{ $labels.src_ip }}'
+      description: 'El DSM registra estos intentos como failed to sign in via password due to authorization failure. Umbral a calibrar: un usuario despistado puede generar 3 o ${ALERT_NAS_LOGIN_FAILS} seguidos sin mala intencion.'
+  - uid: syno_unexpected_shutdown
+    title: '[21] Synology - Apagado inesperado'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host) (count_over_time({job="synology"} |~ `was not shut down properly|improperly shut down|not shut down normally` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: El NAS {{ $labels.host }} se ha apagado de forma inesperada
+      description: Puede indicar corte de corriente, fallo de fuente o cuelgue del sistema. Con Btrfs conviene revisar la integridad del volumen despues.
+  - uid: syno_mass_delete
+    title: '[23] Synology - Borrado masivo de ficheros'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: 'sum by (host, syno_user, src_ip) (count_over_time({job="synology"} |~ `Event: delete` !~ `(?i)(\.maa[0-9]*|\.mayaSwatches|workspace\.mel|\.cfa|\.pek|\.prv|audio previews|peak files|media cache|ncache|autosave|_cache\.|/cache/|\.tmp|\.temp|\.bak|~\$|thumbs\.db|\.ds_store|desktop\.ini|\.nk~|ayon_cache)` | regexp `User: (?P<syno_user>[^,]+)` | regexp `IP: (?P<src_ip>[0-9.]+)` [5m]))'
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_NAS_MASS_DELETE}
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.syno_user }} ha borrado mas de ${ALERT_NAS_MASS_DELETE} ficheros en 5 minutos desde {{ $labels.src_ip }}'
+      description: Excluye temporales y caches regenerables (Maya .maa, previews de Premiere .cfa y .pek, Media Cache, autosaves, nCache). Solo cuenta borrados de ficheros reales. Umbral ${ALERT_NAS_MASS_DELETE} en 5 minutos. Si hay snapshots de Btrfs se puede recuperar desde ahi.
+  - uid: syno_folder_delete
+    title: '[24] Synology - Carpeta borrada'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: 'sum by (host, syno_user, path, src_ip) (count_over_time({job="synology"} |~ `Event: delete` |~ `File/Folder: Folder` !~ `(?i)(\.maa[0-9]*|\.mayaSwatches|workspace\.mel|\.cfa|\.pek|\.prv|audio previews|peak files|media cache|ncache|autosave|_cache\.|/cache/|\.tmp|\.temp|\.bak|~\$|thumbs\.db|\.ds_store|desktop\.ini|\.nk~|ayon_cache)` | regexp `Path: (?P<path>[^,]+)` | regexp `User: (?P<syno_user>[^,]+)` | regexp `IP: (?P<src_ip>[0-9.]+)` [5m]))'
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 4
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.syno_user }} ha borrado carpetas en {{ $labels.path }}'
+      description: Borrado de directorios excluyendo carpetas de trabajo regenerables (.PRV de Premiere, Peak Files, Media Cache, autosaves). Umbral en 5 para no saltar con temporales que se escapen del filtro.
+  - uid: source_down_synology
+    title: '[22] Fuente sin datos - Logs del Synology'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (job) (count_over_time({job="synology"} [30m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Logs del Synology lleva 30 minutos sin enviar nada a Loki
+      description: 'Job afectado: synology. Si una fuente deja de mandar logs sin que nos enteremos, ese sistema queda ciego. Revisar el agente y la conectividad.'

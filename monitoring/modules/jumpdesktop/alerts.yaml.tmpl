@@ -1,0 +1,254 @@
+# Reglas de alerta del módulo jumpdesktop
+# Umbrales parametrizables en el .env del cliente: ninguno
+apiVersion: 1
+groups:
+- orgId: 1
+  name: jump-desktop
+  folder: Alertas
+  interval: 5m
+  rules:
+  - uid: jd_out_of_hours
+    title: '[15] Jump - Conexion fuera de horario'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (user, host_extracted, ip, country) (count_over_time({job="jumpdesktop"} | json | anomaly=`out_of_hours` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.user }} ha conectado a {{ $labels.host_extracted }} fuera de horario'
+      description: 'Conexion desde {{ $labels.ip }} ({{ $labels.country }}) fuera de 08:00-20:00 o en fin de semana. OJO: la hora del aviso es la de deteccion, no la de la conexion. El poller trae los eventos cada 5 minutos y puede arrastrar eventos de la madrugada. La hora real esta en el campo event_time del log. Verificar contra el registro de teletrabajo aprobado.'
+  - uid: jd_auth_failed
+    title: '[16] Jump - Logins fallidos repetidos'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (user, host_extracted, ip) (count_over_time({job="jumpdesktop"} | json | anomaly=`auth_failed` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 900
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.user }}: mas de 5 autenticaciones fallidas contra {{ $labels.host_extracted }}'
+      description: Origen {{ $labels.ip }}. Puede indicar intento de acceso no autorizado a una estacion.
+  - uid: jd_new_ip
+    title: '[17a] Jump - IP nueva para un usuario'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (user, ip, country, city, host_extracted) (count_over_time({job="jumpdesktop"} | json | anomaly=`new_ip` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.user }} ha conectado desde una IP nueva: {{ $labels.ip }}'
+      description: 'Origen: {{ $labels.city }} ({{ $labels.country }}), destino {{ $labels.host_extracted }}. Deteccion por baseline de comportamiento. Verificar con el usuario antes de dar por buena la IP.'
+  - uid: jd_new_country
+    title: '[17b] Jump - Pais nuevo para un usuario'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (user, ip, country, asn, host_extracted) (count_over_time({job="jumpdesktop"} | json | anomaly=`new_country` [10m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: '{{ $labels.user }} ha conectado desde {{ $labels.country }}, pais no habitual para esa cuenta'
+      description: IP {{ $labels.ip }} ({{ $labels.asn }}), destino {{ $labels.host_extracted }}. Contrastar con viajes o teletrabajo autorizado en el registro TPN.
+  - uid: source_down_jumpdesktop
+    title: '[22] Fuente sin datos - Logs de Jump Desktop'
+    condition: C
+    for: 30m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 14400
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (job) (count_over_time({job="jumpdesktop"} [4h]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 14400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 14400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Los logs de Jump Desktop llevan 4 horas sin llegar a Loki
+      description: Ventana ampliada a 4 horas porque de madrugada no hay conexiones remotas y con 30 minutos saltaba todas las noches. Si salta, revisar el cron del poller, el token de la API y que Promtail siga leyendo el fichero.

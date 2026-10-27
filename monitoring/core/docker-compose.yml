@@ -1,0 +1,116 @@
+# =============================================================================
+# Stack de monitorización Xatélite — CORE
+# Los módulos añaden servicios con modules/<modulo>/compose.yml (COMPOSE_FILE en .env).
+#
+# Reglas de la plantilla (cada una viene de una avería real, ver README):
+#   1. restart: unless-stopped en TODOS los servicios
+#   2. límite de logs (aquí y en /etc/docker/daemon.json)
+#   3. versiones fijadas: se actualizan cambiando la variable en el .env
+# =============================================================================
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "3"
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  grafana_data:
+  prometheus_data:
+  loki_data:
+  promtail_positions:
+
+services:
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-13.1.9}
+    container_name: grafana
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD no definida}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL}
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS:-false}
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SMTP_ENABLED=${SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${SMTP_HOST:-}
+      - GF_SMTP_USER=${SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-alertas@xatelite.com}
+      - GF_SMTP_FROM_NAME=${SMTP_FROM_NAME:-Grafana}
+      - GF_SMTP_STARTTLS_POLICY=${SMTP_STARTTLS_POLICY:-OpportunisticStartTLS}
+      - GF_SMTP_SKIP_VERIFY=${SMTP_SKIP_VERIFY:-false}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    networks: [monitoring]
+    depends_on: [prometheus, loki]
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v3.13.5}
+    container_name: prometheus
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-90d}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-20GB}"
+      - "--web.enable-lifecycle"
+    networks: [monitoring]
+
+  loki:
+    image: grafana/loki:${LOKI_VERSION:-3.7.9}
+    container_name: loki
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "3100:3100"      # restringido por IP en DOCKER-USER (monitoring-firewall)
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks: [monitoring]
+
+  # Promtail está en fin de vida (Grafana recomienda Alloy). Se mantiene porque
+  # es lo que hay en producción; migración a Alloy en el roadmap.
+  promtail:
+    image: grafana/promtail:${PROMTAIL_VERSION:-3.6.11}
+    container_name: promtail
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - promtail_positions:/tmp           # posiciones persistentes (sin esto, al recrear el contenedor reingiere todo)
+    command: -config.file=/etc/promtail/config.yml
+    networks: [monitoring]
+    depends_on: [loki]
+
+  # Métricas de la propia VM (disco lleno = el fallo que más se repite)
+  node-exporter:
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION:-v1.12.1}
+    container_name: node-exporter
+    restart: unless-stopped
+    logging: *logging
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - "--path.rootfs=/host"
+    networks: [monitoring]

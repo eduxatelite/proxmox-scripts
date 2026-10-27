@@ -1,0 +1,4 @@
+services:
+  promtail:
+    ports:
+      - "${SYSLOG_PORT_NAS:-1516}:1516/tcp"     # syslog DSM, TCP, formato IETF / RFC5424

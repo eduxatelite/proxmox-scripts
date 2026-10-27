@@ -199,6 +199,7 @@ create_vm() {
     --scsihw virtio-scsi-single \
     --vga std \
     --agent enabled=1 \
+    --onboot 1 \
     || error "Failed to create VM ${VMID}"
 
   info "Importing image as disk..."

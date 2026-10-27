@@ -1,0 +1,72 @@
+# Alertas del propio stack (todas las instalaciones)
+apiVersion: 1
+groups:
+- orgId: 1
+  name: stack
+  folder: Alertas
+  interval: 1m
+  rules:
+  - uid: stack_vm_disk
+    title: '[0a] Stack - Disco de la VM de monitorizacion'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange: {from: 600, to: 0}
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: 100 - (node_filesystem_avail_bytes{job="monitoring_vm",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{job="monitoring_vm",fstype!~"tmpfs|overlay|squashfs"} * 100)
+        instant: true
+    - refId: C
+      relativeTimeRange: {from: 600, to: 0}
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_VM_DISK_PCT}
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: 'Disco de la VM de monitorizacion al {{ $values.A.Value | printf "%.0f" }}% ({{ $labels.mountpoint }})'
+      description: Si se llena el disco caen Loki y Prometheus. Revisar docker system df y el tamano de los volumenes.
+  - uid: stack_target_down
+    title: '[0b] Stack - Fuente de metricas caida'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange: {from: 600, to: 0}
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: up{job!="windows_dc"}
+        instant: true
+    - refId: C
+      relativeTimeRange: {from: 600, to: 0}
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Prometheus no puede leer {{ $labels.job }} ({{ $labels.instance }})'
+      description: El exporter no responde. Revisar http://${VM_IP}:9090/targets

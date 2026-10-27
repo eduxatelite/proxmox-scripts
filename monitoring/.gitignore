@@ -1,0 +1,20 @@
+# ─── Secretos: nunca al repositorio ───
+*.env
+!*.env.example
+.env
+pve.yml
+*.key
+*.pem
+*_token*
+
+
+# ─── Basura ───
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# rlmutil se toma de ../scripts/nuke/ al desplegar (no duplicar el binario)
+modules/nuke/build/rlmutil

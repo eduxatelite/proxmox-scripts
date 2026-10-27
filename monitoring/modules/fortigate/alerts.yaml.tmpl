@@ -1,0 +1,313 @@
+# Reglas de alerta del módulo fortigate
+# Umbrales parametrizables en el .env del cliente: ALERT_FG_CPU_PCT, ALERT_FG_MEM_PCT, ALERT_FG_SESSIONS
+apiVersion: 1
+groups:
+- orgId: 1
+  name: fortigate
+  folder: Alertas
+  interval: 5m
+  rules:
+  - uid: fg_vpn_bruteforce
+    title: '[11] Forti - Logins fallidos contra la VPN'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, vpn_user, src_ip, reason) (count_over_time({job="fortigate"} |~ `ssl-login-fail|SSL VPN login fail|tunnel-up-fail` | regexp `user="(?P<vpn_user>[^"]*)"` | regexp `remip=(?P<src_ip>[0-9.]+)` | regexp `reason="(?P<reason>[^"]*)"` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 5
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.vpn_user }}: mas de 5 fallos de VPN desde {{ $labels.src_ip }}'
+      description: 'Motivo del ultimo fallo: {{ $labels.reason }}. Si el motivo es de credenciales puede ser ataque o password caducada; si es de politica, revisar el grupo del usuario.'
+  - uid: fg_admin_login
+    title: '[12] Forti - Acceso administrativo al firewall'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, admin_user, src_ip, login_status) (count_over_time({job="fortigate"} |~ `Admin login` | regexp `user="(?P<admin_user>[^"]*)"` | regexp `srcip=(?P<src_ip>[0-9.]+)` | regexp `status="(?P<login_status>[^"]*)"` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Acceso admin al FortiGate: {{ $labels.admin_user }} desde {{ $labels.src_ip }} ({{ $labels.login_status }})'
+      description: Cubre login correcto y fallido, el campo status lo distingue. Contrastar con ventanas de mantenimiento previstas. Evidencia de control de acceso para TPN.
+  - uid: fg_config_change
+    title: '[13] Forti - Cambio de configuracion'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (host, admin_user, cfgpath, cfgattr) (count_over_time({job="fortigate"} |~ `Attribute configured|Object attribute configured` | regexp `user="(?P<admin_user>[^"]*)"` | regexp `cfgpath="(?P<cfgpath>[^"]*)"` | regexp `cfgattr="(?P<cfgattr>[^"]*)"` [5m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.admin_user }} ha modificado {{ $labels.cfgpath }} en el FortiGate'
+      description: 'Cambio concreto: {{ $labels.cfgattr }}. El formato es atributo[valor_anterior->valor_nuevo], asi que el aviso ya dice que habia antes y que hay ahora. Evidencia de control de cambios.'
+  - uid: fg_cpu_high
+    title: '[14a] Forti - CPU alta'
+    condition: C
+    for: 15m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: fgSysCpuUsage{job="snmp_fortigate"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_FG_CPU_PCT}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: CPU del FortiGate al {{ $values.A.Value }}% ({{ $labels.device }})
+      description: Sostenido por encima del ${ALERT_FG_CPU_PCT}% durante 15 minutos en {{ $labels.device }}. Revisar sesiones, IPS y procesos.
+  - uid: fg_mem_high
+    title: '[14b] Forti - Memoria alta'
+    condition: C
+    for: 15m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: fgSysMemUsage{job="snmp_fortigate"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_FG_MEM_PCT}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Memoria del FortiGate al {{ $values.A.Value }}% ({{ $labels.device }})
+      description: Por encima del 88% el FortiGate entra en conserve mode y empieza a descartar trafico. Umbral puesto en ${ALERT_FG_MEM_PCT}% para tener margen.
+  - uid: fg_sessions_high
+    title: '[14c] Forti - Sesiones al limite'
+    condition: C
+    for: 15m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: fgSysSesCount{job="snmp_fortigate"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_FG_SESSIONS}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $values.A.Value }} sesiones concurrentes en {{ $labels.device }}'
+      description: Umbral ${ALERT_FG_SESSIONS} (ALERT_FG_SESSIONS en el .env). Calibrar tras observar el maximo real en horas punta.
+  - uid: source_down_fortigate
+    title: '[22] Fuente sin datos - Logs del FortiGate'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (job) (count_over_time({job="fortigate"} [30m]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 2400
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Logs del FortiGate lleva 30 minutos sin enviar nada a Loki
+      description: 'Job afectado: fortigate. Con el filtro de severidad puesto el volumen es bajo, asi que 30 minutos sin nada puede ser normal de noche. Si da falsos positivos, ampliar la ventana a 2 horas.'

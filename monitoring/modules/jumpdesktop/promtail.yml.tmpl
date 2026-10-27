@@ -1,0 +1,8 @@
+  # Jump Desktop: connections.log / activity.log (poller) y anomalies.log (watcher).
+  # Promtail añade la etiqueta filename automáticamente.
+  - job_name: jumpdesktop
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: jumpdesktop
+          __path__: /var/log/jumpdesktop/*.log

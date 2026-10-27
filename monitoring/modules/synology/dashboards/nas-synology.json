@@ -1,0 +1,879 @@
+{
+  "uid": "nas-synology",
+  "title": "NAS Synology",
+  "tags": [
+    "nas",
+    "synology",
+    "xatelite"
+  ],
+  "editable": true,
+  "schemaVersion": 39,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "nas",
+        "label": "NAS",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": {
+          "query": "label_values(up{job=\"snmp_synology\"}, device)",
+          "refId": "v"
+        },
+        "definition": "label_values(up{job=\"snmp_synology\"}, device)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Estado",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Accesible por SNMP",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "SIN RESPUESTA"
+                },
+                "1": {
+                  "text": "OK"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Sistema",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "synoSystemStatus{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Normal",
+                  "color": "green"
+                },
+                "2": {
+                  "text": "FALLO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Alimentación",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "synoPowerStatus{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Normal",
+                  "color": "green"
+                },
+                "2": {
+                  "text": "FALLO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Ventiladores",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "max by (device) (synoSystemFanStatus{job=\"snmp_synology\",device=~\"$nas\"})",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Normal",
+                  "color": "green"
+                },
+                "2": {
+                  "text": "FALLO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Temperatura",
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "synoTemperature{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 55
+              },
+              {
+                "color": "red",
+                "value": 65
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Uptime",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sysUpTime{job=\"snmp_synology\",device=~\"$nas\"} / 100",
+          "legendFormat": "{{device}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Almacenamiento",
+      "id": 8,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "RAID / volúmenes",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "synoRaidStatus{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "{{device}} {{raid_name}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Normal",
+                  "color": "green"
+                },
+                "2": {
+                  "text": "Reparando",
+                  "color": "orange"
+                },
+                "3": {
+                  "text": "Migrando",
+                  "color": "orange"
+                },
+                "4": {
+                  "text": "Expandiendo",
+                  "color": "orange"
+                },
+                "5": {
+                  "text": "Borrando",
+                  "color": "orange"
+                },
+                "6": {
+                  "text": "Creando",
+                  "color": "orange"
+                },
+                "7": {
+                  "text": "RaidSyncing",
+                  "color": "orange"
+                },
+                "8": {
+                  "text": "RaidParityChecking",
+                  "color": "orange"
+                },
+                "9": {
+                  "text": "RaidAssembling",
+                  "color": "orange"
+                },
+                "10": {
+                  "text": "Cancelando",
+                  "color": "orange"
+                },
+                "11": {
+                  "text": "DEGRADADO",
+                  "color": "red"
+                },
+                "12": {
+                  "text": "CAÍDO",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Ocupación de volúmenes %",
+      "id": 10,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "100 * hrStorageUsed{job=\"snmp_synology\",device=~\"$nas\",mountpoint=~\"/volume.*\"} / hrStorageSize{job=\"snmp_synology\",device=~\"$nas\",mountpoint=~\"/volume.*\"}",
+          "legendFormat": "{{device}} {{mountpoint}}",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Espacio usado (bytes)",
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "hrStorageUsed{job=\"snmp_synology\",device=~\"$nas\",mountpoint=~\"/volume.*\"} * hrStorageAllocationUnits{job=\"snmp_synology\",device=~\"$nas\",mountpoint=~\"/volume.*\"}",
+          "legendFormat": "{{device}} {{mountpoint}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 11
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "description": "Tendencia de crecimiento: útil para prever cuándo se llena."
+    },
+    {
+      "type": "table",
+      "title": "Discos",
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "synoDiskStatus{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "synoDiskTemperature{job=\"snmp_synology\",device=~\"$nas\"}",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 11
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Estado"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Normal",
+                        "color": "green"
+                      },
+                      "2": {
+                        "text": "Iniciado",
+                        "color": "blue"
+                      },
+                      "3": {
+                        "text": "No iniciado",
+                        "color": "orange"
+                      },
+                      "4": {
+                        "text": "Particiones dañadas",
+                        "color": "red"
+                      },
+                      "5": {
+                        "text": "AVERIADO",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {},
+      "transformations": [
+        {
+          "id": "merge"
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "diskIndex": true,
+              "cliente": true
+            },
+            "renameByName": {
+              "Value #A": "Estado",
+              "Value #B": "Temp ºC",
+              "disk_id": "Disco",
+              "device": "NAS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Registros del DSM (syslog)",
+      "id": 13,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Logins fallidos al DSM",
+      "id": 14,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (count_over_time({job=\"synology\", host=~\"$nas\"} |~ `failed to sign in` [5m]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Borrados de ficheros",
+      "id": 15,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (count_over_time({job=\"synology\", host=~\"$nas\"} |~ `Event: delete` [5m]))",
+          "legendFormat": "{{host}}",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Últimos eventos",
+      "id": 16,
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"synology\", host=~\"$nas\"}",
+          "legendFormat": "",
+          "queryType": "range",
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}

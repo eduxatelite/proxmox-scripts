@@ -1,0 +1,15 @@
+services:
+  snmp-exporter:
+    image: prom/snmp-exporter:${SNMP_EXPORTER_VERSION:-v0.31.0}
+    container_name: snmp-exporter
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: "100m", max-file: "3"}}
+    # sin ports: solo se consulta desde Prometheus por la red interna
+    environment:
+      - SNMP_COMMUNITY=${SNMP_COMMUNITY:?SNMP_COMMUNITY no definida}
+    volumes:
+      - ./config/snmp-exporter/snmp.yml:/etc/snmp_exporter/snmp.yml:ro
+    command:
+      - "--config.file=/etc/snmp_exporter/snmp.yml"
+      - "--config.expand-environment-variables"
+    networks: [monitoring]

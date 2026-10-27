@@ -1,0 +1,10 @@
+[Unit]
+Description=Latido cada 5 minutos al Uptime Kuma
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

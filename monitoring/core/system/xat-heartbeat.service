@@ -1,0 +1,8 @@
+[Unit]
+Description=Latido del stack de monitorizacion al Uptime Kuma de Xatelite
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/grafana-stack/.env
+ExecStart=/usr/local/bin/xat-heartbeat.sh
