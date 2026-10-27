@@ -198,6 +198,26 @@ if mod_on synology "¿NAS Synology? (dashboard de RAID/discos/volúmenes + logs 
   ensure_snmp
 fi
 
+# ─── TrueNAS ───
+if mod_on truenas "¿NAS TrueNAS? (dashboard de pools/discos/temperaturas + alertas del propio TrueNAS + 9 alertas)"; then
+  ask_list TRUENAS_TARGETS "  TrueNAS (nombre:ip, separados por espacio)" "${TRUENAS_TARGETS:-}"
+  ask TRUENAS_API_USER "  Usuario de la API en el TrueNAS (rol Read-only Administrator)" "${TRUENAS_API_USER:-monitoring}"
+  echo "  Si aún no tienes la API key, deja vacío: el resumen final explica cómo crearla."
+  NEWKEYS=""
+  for item in $TRUENAS_TARGETS; do
+    tn="${item%%:*}"
+    cur="$(tr ' ' '\n' <<<"${TRUENAS_API_KEYS:-}" | awk -F= -v n="$tn" '$1==n{print substr($0,length(n)+2)}')"
+    printf -v "TNKEY" '%s' "$cur"
+    ask_secret TNKEY "  API key de ${tn}"
+    [[ -n "${TNKEY:-}" ]] && NEWKEYS+="${tn}=${TNKEY} "
+  done
+  TRUENAS_API_KEYS="${NEWKEYS% }"
+  if [[ -z "$TRUENAS_API_KEYS" ]]; then
+    warn "  Sin API keys: se omite TrueNAS en esta instalación. Añádelas luego con ./configurar.sh"
+    NEW_MODS="${NEW_MODS/truenas /}"
+  fi
+fi
+
 # ─── Active Directory ───
 if mod_on ad "¿Domain Controllers? (dashboard de DCs + eventos de seguridad + 12 alertas)"; then
   ask_list AD_DCS "  Controladores de dominio (NOMBRE:ip, separados por espacio)" "${AD_DCS:-$(dc_default)}"
@@ -245,6 +265,7 @@ umask 077
            PVE_NODES PVE_USER PVE_TOKEN_NAME PVE_TOKEN_VALUE PVE_VERIFY_SSL PVE_NODE_EXPORTER \
            JUMPDESKTOP_TEAM_ID JUMPDESKTOP_API_TOKEN JD_WORK_START JD_WORK_END JD_LEARNING_MODE \
            DEADLINE_HOST DEADLINE_PORT DEADLINE_APIKEY RLM_HOST RLM_PORT \
+           TRUENAS_TARGETS TRUENAS_API_USER TRUENAS_API_KEYS \
            $(compgen -v | grep -E '^ALERT_[A-Z_]+$' | grep -v ALERT_CONTACT_EMAIL); do
     if [[ -n "${!v:-}" ]]; then q "$v"; fi
   done

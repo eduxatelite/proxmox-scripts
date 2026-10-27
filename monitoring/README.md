@@ -32,6 +32,7 @@ Descarga el repo y ejecuta `deploy.sh`:
    | ¿FortiGate? | IP (propone el gateway) | dashboard FortiGate, SNMP, 7 alertas |
    | ¿Proxmox? | nodos (los detecta del cluster) | dashboard Proxmox. **Crea él solo** el usuario `monitoring@pve` + token; node_exporter opcional por SSH |
    | ¿NAS Synology? | nombre:ip de cada NAS | dashboard NAS (RAID, discos, volúmenes, logs DSM), 8 alertas |
+   | ¿NAS TrueNAS? | nombre:ip, usuario y API key de cada NAS | dashboard TrueNAS (pools, discos, temperaturas, scrub, alertas del propio TrueNAS) + logs, 9 alertas |
    | ¿Domain Controllers? | NOMBRE:ip (propone los DNS) | dashboard DCs (servicios, replicación, 4625/4740...), 12 alertas |
    | └ ¿Auditoría TPN? | — | dashboard de auditoría de 28 paneles |
    | ¿Jump Desktop? | Team ID, token, horario | anomalías de conexión, 5 alertas |
@@ -100,6 +101,7 @@ docs/                   Inventario, manuales y notas de operación
 |---|---|---|
 | `fortigate` | syslog TCP 1515/UDP 1514, SNMP, 7 alertas, dashboard | `FORTIGATE_IP`, `SNMP_COMMUNITY` |
 | `synology` | dashboard NAS, syslog TCP 1516, SNMP (RAID, discos, volumen), 8 alertas | `NAS_TARGETS`, `SNMP_COMMUNITY` |
+| `truenas` | exporter propio por API (WebSocket), syslog TCP 1517, dashboard en la carpeta NAS, 9 alertas | `TRUENAS_TARGETS`, `TRUENAS_API_KEYS` |
 | `ad` | dashboard DCs, windows_exporter, eventos 4625/4740/..., 12 alertas | `AD_DCS` |
 | `proxmox` | pve-exporter (token), node_exporter opcional, dashboard | `PVE_NODES`, `PVE_TOKEN_VALUE` |
 | `jumpdesktop` | poller + watcher + cron, 5 alertas | `JUMPDESKTOP_TEAM_ID`, `JUMPDESKTOP_API_TOKEN` |

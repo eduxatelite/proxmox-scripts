@@ -1,0 +1,20 @@
+services:
+  truenas-exporter:
+    build:
+      context: ./modules/truenas/build
+    image: xatelite/truenas-exporter:local
+    container_name: truenas-exporter
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: "100m", max-file: "3"}}
+    environment:
+      - TRUENAS_TARGETS=${TRUENAS_TARGETS:?TRUENAS_TARGETS no definida}
+      - TRUENAS_API_USER=${TRUENAS_API_USER:-monitoring}
+      - TRUENAS_API_KEYS=${TRUENAS_API_KEYS:?TRUENAS_API_KEYS no definida}
+      - TRUENAS_VERIFY_SSL=${TRUENAS_VERIFY_SSL:-false}
+      - POLL_INTERVAL=60
+      - EXPORTER_PORT=9310
+    networks: [monitoring]
+
+  promtail:
+    ports:
+      - "${SYSLOG_PORT_TRUENAS:-1517}:1517/tcp"   # syslog TrueNAS (TCP, RFC3164)

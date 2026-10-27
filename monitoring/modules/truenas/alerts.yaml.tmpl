@@ -1,0 +1,346 @@
+# Reglas de alerta del módulo truenas
+# Umbrales: ALERT_TRUENAS_POOL_PCT, ALERT_TRUENAS_DISK_TEMP, ALERT_TRUENAS_SCRUB_DAYS
+apiVersion: 1
+groups:
+- orgId: 1
+  name: truenas
+  folder: Alertas
+  interval: 1m
+  rules:
+  - uid: tn_down
+    title: '[30] TrueNAS - NAS sin respuesta'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: truenas_up
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: TrueNAS {{ $labels.nas }} no responde a la API
+      description: 'El exporter no puede conectar o autenticarse (red caída, NAS apagado o API key revocada). Ver: docker logs truenas-exporter'
+  - uid: tn_pool_unhealthy
+    title: '[31] TrueNAS - Pool no sano'
+    condition: C
+    for: 2m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: truenas_pool_healthy
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Pool {{ $labels.pool }} de {{ $labels.nas }} NO está sano
+      description: Estado reportado por TrueNAS distinto de ONLINE/sano. Revisar Almacenamiento → pool y el estado de los discos.
+  - uid: tn_pool_full
+    title: '[32] TrueNAS - Pool casi lleno'
+    condition: C
+    for: 30m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: 100 * truenas_pool_allocated_bytes{pool!="boot-pool"} / truenas_pool_size_bytes{pool!="boot-pool"}
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_TRUENAS_POOL_PCT}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Pool {{ $labels.pool }} de {{ $labels.nas }} al {{ $values.A.Value | printf "%.1f" }}%
+      description: Por encima del ${ALERT_TRUENAS_POOL_PCT}% ZFS pierde rendimiento y fragmenta. Liberar espacio, revisar snapshots o ampliar.
+  - uid: tn_disk_faulted
+    title: '[33] TrueNAS - Disco fuera de servicio en el pool'
+    condition: C
+    for: 2m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: truenas_pool_disk_online
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: Disco {{ $labels.disk }} del pool {{ $labels.pool }} ({{ $labels.nas }}) en estado {{ $labels.status }}
+      description: Disco FAULTED/REMOVED/UNAVAIL/DEGRADED. Comprobar cableado y SMART; preparar reemplazo.
+  - uid: tn_disk_errors
+    title: '[34] TrueNAS - Errores ZFS en disco'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: sum by (nas, pool, disk) (truenas_pool_disk_errors)
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.disk }} ({{ $labels.pool }}, {{ $labels.nas }}) acumula errores de lectura/escritura/checksum'
+      description: Errores ZFS en el disco. Si siguen creciendo tras un zpool clear y un scrub, cambiar el disco.
+  - uid: tn_disk_temp
+    title: '[35] TrueNAS - Disco caliente'
+    condition: C
+    for: 30m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: truenas_disk_temperature_celsius
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_TRUENAS_DISK_TEMP}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: Disco {{ $labels.disk }} ({{ $labels.model }}) de {{ $labels.nas }} a {{ $values.A.Value | printf "%.0f" }} ºC
+      description: Revisar ventilación del chasis y temperatura de la sala.
+  - uid: tn_scrub_old
+    title: '[36] TrueNAS - Scrub sin hacer'
+    condition: C
+    for: 1h
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: (time() - truenas_pool_scan_end_timestamp_seconds{function="SCRUB"}) / 86400
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - ${ALERT_TRUENAS_SCRUB_DAYS}
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: 'Pool {{ $labels.pool }} de {{ $labels.nas }}: último scrub hace {{ $values.A.Value | printf "%.0f" }} días'
+      description: Revisar la tarea de scrub en Protección de datos.
+  - uid: tn_alerts
+    title: '[37] TrueNAS - Alertas activas en el propio TrueNAS'
+    condition: C
+    for: 10m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: PBFA97CFB590B2093
+      model:
+        refId: A
+        expr: sum by (nas) (truenas_alerts{level=~"ERROR|CRITICAL|ALERT|EMERGENCY"})
+        instant: true
+    - refId: C
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: A
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: '{{ $labels.nas }} tiene alertas de nivel ERROR o superior activas'
+      description: TrueNAS reporta alertas propias (SMART, replicación, certificados, actualizaciones fallidas...). Ver la campana del panel web o la tabla del dashboard.
+  - uid: source_down_truenas
+    title: '[22] Fuente sin datos - Logs del TrueNAS'
+    condition: C
+    for: 0m
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 7200
+        to: 0
+      datasourceUid: P8E80F9AEF21F6940
+      model:
+        refId: A
+        expr: sum by (job) (count_over_time({job="truenas"} [2h]))
+        queryType: range
+    - refId: B
+      relativeTimeRange:
+        from: 7200
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: B
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: replaceNN
+          replaceWithValue: 0
+    - refId: C
+      relativeTimeRange:
+        from: 7200
+        to: 0
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: threshold
+        expression: B
+        conditions:
+        - evaluator:
+            type: lt
+            params:
+            - 1
+    noDataState: Alerting
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: No llegan logs del TrueNAS desde hace 2 horas
+      description: Revisar Sistema → Avanzado → Syslog en el NAS (servidor y puerto TCP) y que el puerto esté publicado en la VM.

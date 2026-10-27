@@ -1,0 +1,14 @@
+  # TrueNAS → Sistema → Avanzado → Syslog (TCP). TrueNAS (syslog-ng) manda formato BSD (RFC3164); si llegan mal, cambiar a rfc5424.
+  - job_name: truenas
+    syslog:
+      listen_address: 0.0.0.0:1517
+      listen_protocol: tcp
+      syslog_format: rfc3164
+      idle_timeout: 60s
+      labels:
+        job: truenas
+    relabel_configs:
+      - source_labels: [__syslog_message_hostname]
+        target_label: host
+      - source_labels: [__syslog_message_app_name]
+        target_label: app

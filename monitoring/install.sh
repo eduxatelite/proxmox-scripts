@@ -195,7 +195,7 @@ done
 ENV_KEYS="$(grep -oE '^[A-Z][A-Z0-9_]*=' "$ENV_FILE" | tr -d '=' ; \
             echo VM_IP GRAFANA_ROOT_URL GRAFANA_PORT LOKI_ALLOWED_SOURCES SMTP_ENABLED SMTP_HOST SMTP_USER SMTP_PASSWORD \
                  SMTP_FROM_ADDRESS SMTP_FROM_NAME SMTP_STARTTLS_POLICY \
-                 SYSLOG_PORT_UDP SYSLOG_PORT_FORTI SYSLOG_PORT_NAS COMPOSE_FILE COMPOSE_PROJECT_NAME)"
+                 SYSLOG_PORT_UDP SYSLOG_PORT_FORTI SYSLOG_PORT_NAS SYSLOG_PORT_TRUENAS COMPOSE_FILE COMPOSE_PROJECT_NAME)"
 {
   echo "# Generado por install.sh el $(date '+%F %T') — NO subir a git"
   echo "# Fuente: ${ENV_FILE}. Para cambiar algo: editar la fuente y relanzar install.sh"
